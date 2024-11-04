@@ -1,27 +1,28 @@
 # src/core/gnosis_core.py
 
+import sys
+import os
 from core.primitive_awareness import PrimitiveAwareness
 
 class GnosisCore:
     def __init__(self):
         """
-        Initializes the GnosisCore framework, with Primitive Awareness as the foundational component.
-        This class will expand to incorporate other components, such as emotional processing and memory.
+        Initializes the GnosisCore framework and its core components, beginning with PrimitiveAwareness.
         """
-        # Initialize the Primitive Awareness module
+        # Initialize PrimitiveAwareness for state observation and pattern prediction
         self.primitive_awareness = PrimitiveAwareness()
-        print("GnosisCore initialized with Primitive Awareness module.")
+        print("GnosisCore initialized with PrimitiveAwareness module.")
 
     def observe_state(self, state):
         """
-        Passes a state to the Primitive Awareness component for observation.
+        Observes the current state and passes it to PrimitiveAwareness for pattern tracking and learning.
         """
-        print(f"Observing state: {state}")
+        print(f"GnosisCore observing state: {state}")
         self.primitive_awareness.observe_state(state)
 
     def predict_next_state(self):
         """
-        Retrieves the next state prediction from the Primitive Awareness component.
+        Uses PrimitiveAwareness to predict the next state based on observed patterns.
         """
         predicted_state = self.primitive_awareness.predict_next_state()
         print(f"GnosisCore predicted next state: {predicted_state}")
@@ -29,12 +30,12 @@ class GnosisCore:
 
     def learn_from_feedback(self, actual_next_state):
         """
-        Provides feedback to the Primitive Awareness component to allow it to learn and adjust.
+        Provides feedback to PrimitiveAwareness for learning from the actual next state.
         """
-        print(f"Learning from feedback. Actual next state: {actual_next_state}")
+        print(f"GnosisCore learning from feedback. Actual next state: {actual_next_state}")
         self.primitive_awareness.learn_from_feedback(actual_next_state)
 
-# Example usage
+# Example usage within the module
 if __name__ == "__main__":
     core = GnosisCore()
     core.observe_state("initial_state")

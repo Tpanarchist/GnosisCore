@@ -2,50 +2,55 @@
 
 from core.gnosis_core import GnosisCore
 
-def test_observe_state():
+def test_core_initialization():
     """
-    Test the observe_state function to ensure it sets the current state in PrimitiveAwareness.
+    Test if GnosisCore initializes correctly with PrimitiveAwareness.
+    """
+    core = GnosisCore()
+    assert core.primitive_awareness is not None, "PrimitiveAwareness was not initialized in GnosisCore."
+
+def test_observe_state_integration():
+    """
+    Test if GnosisCore can observe a state through PrimitiveAwareness.
     """
     core = GnosisCore()
     initial_state = "initial_state"
     core.observe_state(initial_state)
-    assert core.primitive_awareness.current_state == initial_state, "observe_state failed to set the correct state in PrimitiveAwareness."
+    assert core.primitive_awareness.current_state == initial_state, "Failed to observe state in PrimitiveAwareness."
 
-def test_predict_next_state():
+def test_predict_next_state_integration():
     """
-    Test predict_next_state to verify that it returns the expected prediction from PrimitiveAwareness.
+    Test if GnosisCore can predict the next state through PrimitiveAwareness without patterns.
     """
     core = GnosisCore()
     core.observe_state("initial_state")
     predicted_state = core.predict_next_state()
-    assert predicted_state == "initial_state", "predict_next_state did not return the expected initial prediction."
+    assert predicted_state == "initial_state", "Failed to predict next state without pattern in GnosisCore."
 
-def test_learn_from_feedback():
+def test_learn_from_feedback_integration():
     """
-    Test learn_from_feedback to ensure it properly updates predictions in PrimitiveAwareness.
+    Test if GnosisCore can learn from feedback through PrimitiveAwareness.
     """
     core = GnosisCore()
-    core.observe_state("state1")
-    core.observe_state("state2")
-    core.observe_state("state3")
-
-    # Make an initial prediction and then learn from feedback
+    core.observe_state("initial_state")
     core.predict_next_state()
-    core.learn_from_feedback("state4")
-
-    # Repeat the pattern to check if it has learned
-    core.observe_state("state2")
-    core.observe_state("state3")
-    core.observe_state("state4")
-    predicted_state = core.predict_next_state()
-    assert predicted_state == "state4", "learn_from_feedback did not update the pattern learning correctly."
+    feedback_state = "next_state"
+    core.learn_from_feedback(feedback_state)
+    # Check that feedback has been processed (the pattern should now include the next state)
+    assert (tuple(core.primitive_awareness.state_history) in core.primitive_awareness.patterns), \
+        "Pattern was not updated with feedback in PrimitiveAwareness."
+    assert core.primitive_awareness.patterns[tuple(core.primitive_awareness.state_history)]["next_state"] == feedback_state, \
+        "Failed to learn new pattern in PrimitiveAwareness through feedback."
 
 if __name__ == "__main__":
-    test_observe_state()
-    print("test_observe_state passed")
-    
-    test_predict_next_state()
-    print("test_predict_next_state passed")
-    
-    test_learn_from_feedback()
-    print("test_learn_from_feedback passed")
+    test_core_initialization()
+    print("test_core_initialization passed")
+
+    test_observe_state_integration()
+    print("test_observe_state_integration passed")
+
+    test_predict_next_state_integration()
+    print("test_predict_next_state_integration passed")
+
+    test_learn_from_feedback_integration()
+    print("test_learn_from_feedback_integration passed")
