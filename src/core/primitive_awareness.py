@@ -1,8 +1,6 @@
-# core/primitive_awareness.py
-
 import sys
 import os
-from collections import deque
+from collections import deque, defaultdict
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
@@ -14,7 +12,7 @@ class PrimitiveAwareness:
         self.current_state = None
         self.next_state = None
         self.state_history = deque(maxlen=history_length)  # Limited history for pattern tracking
-        self.patterns = {}  # Store observed patterns and their predicted next states
+        self.patterns = defaultdict(lambda: {"next_state": None, "weight": 0})  # Patterns with weights
 
     def observe_state(self, state):
         """
@@ -31,13 +29,17 @@ class PrimitiveAwareness:
         """
         if len(self.state_history) < self.state_history.maxlen:
             return  # Wait until the history is full to start pattern recognition
-        
+
         # Convert history to a tuple (hashable) for pattern storage
         history_tuple = tuple(self.state_history)
         
-        # Record the pattern and its next state
-        if history_tuple not in self.patterns:
-            self.patterns[history_tuple] = None  # Placeholder for the predicted next state
+        # If the pattern is new, initialize its next state and weight
+        if not self.patterns[history_tuple]["next_state"]:
+            self.patterns[history_tuple]["next_state"] = self.current_state
+            self.patterns[history_tuple]["weight"] += 1  # Initialize with a weight of 1
+        else:
+            # Increment the weight if the pattern exists
+            self.patterns[history_tuple]["weight"] += 1
 
     def predict_next_state(self):
         """
@@ -46,13 +48,14 @@ class PrimitiveAwareness:
         if len(self.state_history) < self.state_history.maxlen:
             print("Not enough history for pattern-based prediction.")
             return self.current_state  # Temporary fallback to current state
-        
+
         history_tuple = tuple(self.state_history)
         
         # Check if we have a pattern match
-        if history_tuple in self.patterns and self.patterns[history_tuple]:
-            self.next_state = self.patterns[history_tuple]
-            print(f"Predicted next state from pattern: {self.next_state}")
+        if history_tuple in self.patterns and self.patterns[history_tuple]["next_state"]:
+            # Predict based on the pattern with the highest weight
+            self.next_state = self.patterns[history_tuple]["next_state"]
+            print(f"Predicted next state from pattern (weighted): {self.next_state}")
         else:
             self.next_state = self.current_state  # Fallback
             print(f"No pattern match found. Predicted next state: {self.next_state}")
@@ -65,14 +68,14 @@ class PrimitiveAwareness:
         """
         history_tuple = tuple(self.state_history)
         
-        # If the prediction was incorrect, update the pattern
+        # If the prediction was incorrect, update the pattern with new next state and reset weight
         if actual_next_state != self.next_state:
             print(f"Prediction was inaccurate. Learning new pattern for: {history_tuple}")
-            self.patterns[history_tuple] = actual_next_state
+            self.patterns[history_tuple] = {"next_state": actual_next_state, "weight": 1}
         else:
-            print("Prediction was accurate.")
-        
-        # Update model with feedback to refine predictions
+            # Increment weight for accurate predictions
+            self.patterns[history_tuple]["weight"] += 1
+            print("Prediction was accurate, reinforcing the pattern.")
 
 # Example usage
 if __name__ == "__main__":
