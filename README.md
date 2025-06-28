@@ -54,11 +54,11 @@ Install:
 ### 4. Set Environment Variables
 
 ```powershell
-$Env:OPENAI_API_KEY = "<your key>"
 $Env:GNOSIS_MODEL   = "gpt-4o-mini"
 $Env:GNOSIS_SNAPSHOT = "gpt-4o-mini-2024-07-18"
 $Env:GNOSIS_TICK_RATE = "0.2"
 ```
+> Your OpenAI API key is already configured on your PC.
 
 ---
 
