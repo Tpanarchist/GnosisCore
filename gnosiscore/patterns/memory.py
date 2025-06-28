@@ -18,7 +18,7 @@ class Memory(StatePatternBase):
             current=current or self.id
         )
         if self.transformer:
-            output = self.transformer(prompt)
+            output = self.transformer.transform(form, context)
             print(f"LLM Output: {output['response']}")
             context["memory_output"] = output["response"]
         else:

@@ -13,7 +13,7 @@ class Persistence(StatePatternBase):
             current=current or self.id
         )
         if self.transformer:
-            output = self.transformer(prompt)
+            output = self.transformer.transform(form, context)
             print(f"LLM Output: {output['response']}")
         else:
             print(f"{self.id} entered (no transformer)")

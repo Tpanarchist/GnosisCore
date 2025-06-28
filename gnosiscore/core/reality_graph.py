@@ -25,7 +25,14 @@ class RealityGraph:
         return cls(states, flows)
 
     def step(self):
-        # Data-driven traversal using flows
-        context = {}
-        for flow in self.flows:
-            context = flow.propagate(context)
+        # Improved: Traverse flows for each form, accumulate state/context
+        for form in self.forms:
+            context = {}
+            for flow in self.flows:
+                # Let form perceive the source pattern
+                if hasattr(flow.source, "id"):
+                    form.perceive(flow.source.id)
+                # Pass both context and form through the flow, accumulate context
+                context = flow.propagate(context=context, form=form)
+            # Print or store the final context for demonstration
+            print(f"RealityGraph.step() final context for form '{form.name}': {context}")

@@ -24,10 +24,15 @@ class StubTransformer(BaseTransformer):
     """
 
     def transform(self, form, context=None):
+        # Example: build a prompt from form and context
+        prompt = f"Form: {getattr(form, 'name', None)}, Context: {context}"
+        # Simulate LLM output based on prompt
+        response = f"Stub LLM output for prompt: {prompt}"
         return {
-            "response": "Stub LLM output.",
+            "response": response,
             "form_id": getattr(form, "id", None),
-            "context": context
+            "context": context,
+            "prompt": prompt
         }
 
 class GPT4OMiniTransformer(BaseTransformer):

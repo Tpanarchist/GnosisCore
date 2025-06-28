@@ -17,7 +17,7 @@ class Awareness(StatePatternBase):
             current=context.get("current", current) or self.id
         )
         if self.transformer:
-            output = self.transformer(prompt)
+            output = self.transformer.transform(form, context)
             print(f"LLM Output: {output['response']}")
             context["awareness_output"] = output["response"]
         else:
