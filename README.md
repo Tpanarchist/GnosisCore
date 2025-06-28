@@ -37,17 +37,71 @@ Subsystems interact via secure, auditable protocols, enforcing strict boundaries
 
 ## Repository Structure
 
-- `ontology/` — Formal specifications of primitives, planes, and data models
-- `protocols/` — Inter-plane communication protocols and security layer
-- `memory/` — Memory subsystem implementation
-- `selfmap/` — Self-map subsystem implementation
-- `transform/` — Transformation subsystem implementation
-- `integrate/` — Integration utilities and APIs
-- `test/` — Unit and integration tests
-- `docs/` — Documentation and research papers
+```
+gnosiscore/
+  primitives/
+    __init__.py
+    models.py
+  planes/
+    __init__.py
+    digital.py
+    mental.py
+    metaphysical.py
+  memory/
+    __init__.py
+    subsystem.py
+  selfmap/
+    __init__.py
+    graph.py
+  transform/
+    __init__.py
+    base.py
+    registry.py
+  messaging/
+    __init__.py
+    websocket.py
+    auth.py
+  runtime.py
+tests/
+  primitives/
+  planes/
+  memory/
+  selfmap/
+  transform/
+  messaging/
+README.md
+```
 - `memory-bank/` — Project Memory Bank (requirements, context, architecture, progress)
 
 ---
+
+## Development Conventions
+
+- **Language:** Python 3.11+ (core), minimal dependencies
+- **Data Modeling:** Use [pydantic](https://docs.pydantic.dev/) for all core models and validation
+- **Graph Operations:** Use [networkx](https://networkx.org/) or lightweight adjacency lists
+- **Async Comms:** [websockets](https://websockets.readthedocs.io/)
+- **Auth & Crypto:** [PyJWT](https://pyjwt.readthedocs.io/), [pynacl](https://pynacl.readthedocs.io/)
+- **Testing:** [pytest](https://docs.pytest.org/), ≥90% coverage, CI: flake8, mypy, pytest
+
+---
+
+## Specification & Documentation Standards
+
+Each module/spec follows this template:
+
+- **Purpose & Context**
+- **Public API / Responsibilities**
+- **Functional Requirements** (CRUD, interfaces, invariants)
+- **Non-Functional Constraints** (performance, security, transactional)
+- **Data Structures & Types** (Pydantic models, field types/constraints)
+- **Example Calls / Code Snippets** (JSON/Python, happy path + error)
+- **Testing Notes** (unit-test stubs, edge-cases, “Tests to write”)
+
+- Docstrings: Google or NumPy style for all public classes/functions
+- Markdown examples: Under each module’s README or in `docs/`
+- Code blocks: Always fenced and labeled
+
 
 ## Getting Started
 
