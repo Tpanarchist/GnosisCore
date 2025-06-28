@@ -4,9 +4,12 @@ class FlowPattern:
         self.target = target
         self.transformer = transformer
 
-    def propagate(self, payload, form=None, context=None):
+    def propagate(self, context=None, form=None):
         print(f"Traversed {self.source} → {self.target}")
-        # If source/target are pattern instances, call on_enter with transformer
+        # Pass context to target pattern, allow mutation
         if hasattr(self.target, "on_enter"):
-            self.target.on_enter(form=form, context=context)
-        return payload
+            result = self.target.on_enter(form=form, context=context)
+            # If on_enter returns a new context, use it
+            if result is not None:
+                context = result
+        return context
