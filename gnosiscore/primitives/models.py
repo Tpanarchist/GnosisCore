@@ -86,6 +86,11 @@ class Belief(Primitive):
     """Primitive representing a belief or proposition."""
     type: ClassVar[Literal["Belief"]] = "Belief"
 
+class Result(BaseModel):
+    """Result of an intent or operation."""
+    status: str = "ok"
+    detail: str = ""
+
 # Example usage:
 # from gnosiscore.primitives.models import Perception
 # perception = Perception(
