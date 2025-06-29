@@ -45,12 +45,31 @@ class MentalPlane:
                     logging.error(f"Rollback failed in memory: {rollback_err}")
             raise
 
-    def submit_intent(self, intent: Transformation) -> Result:
+    def submit_intent(self, transformation: Transformation, digital_plane, callback=None) -> Result:
         """
-        Submit an intent/action to the DigitalPlane. Returns Result (possibly async in future).
+        Submit a Transformation as an Intent to the DigitalPlane.
+        Returns a pending Result. Optionally registers a callback for result delivery.
         """
-        # Placeholder: In real system, this would send to DigitalPlane
-        return Result()
+        from gnosiscore.primitives.models import Intent
+        from uuid import uuid4
+        from datetime import datetime, timezone
+
+        intent = Intent(
+            id=uuid4(),
+            transformation=transformation,
+            submitted_at=datetime.now(timezone.utc),
+            version=1,
+        )
+        return digital_plane.submit_intent(intent, self, callback=callback)
+
+    def on_result(self, result: Result) -> None:
+        """
+        Callback for receiving a Result from DigitalPlane.
+        Override or extend as needed.
+        """
+        # Default: log or store result
+        import logging
+        logging.info(f"MentalPlane received result: {result}")
 
     def query_memory(self, **kwargs) -> list[Primitive]:
         """

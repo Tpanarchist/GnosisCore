@@ -62,9 +62,40 @@ class Memory(Primitive):
     """Primitive representing a memory record."""
     type: ClassVar[Literal["Memory"]] = "Memory"
 
+from typing import Optional
+
 class Transformation(Primitive):
-    """Primitive representing a transformation or operation."""
+    """Primitive representing a transformation or operation.
+
+    content fields:
+        - operation: str (e.g., "add_node", "update_value", "remove_entity")
+        - target: UUID or list[UUID] (references affected)
+        - parameters: dict (arbitrary operation details)
+        - llm_params: Optional[dict] (OpenAI API config, or None for local logic)
+        - (optional: initiator, provenance, timestamp, etc.)
+    """
     type: ClassVar[Literal["Transformation"]] = "Transformation"
+
+    @classmethod
+    def create(
+        cls,
+        id: UUID,
+        metadata: Metadata,
+        operation: str,
+        target: Any,
+        parameters: dict[str, Any],
+        llm_params: Optional[dict[str, Any]] = None,
+        **kwargs: Any
+    ):
+        content: dict[str, Any] = {
+            "operation": operation,
+            "target": target,
+            "parameters": parameters,
+        }
+        if llm_params is not None:
+            content["llm_params"] = llm_params
+        content.update(kwargs)
+        return cls(id=id, metadata=metadata, content=content)
 
 class Label(Primitive):
     """Primitive representing a label or annotation."""
@@ -86,10 +117,25 @@ class Belief(Primitive):
     """Primitive representing a belief or proposition."""
     type: ClassVar[Literal["Belief"]] = "Belief"
 
+from pydantic import ConfigDict
+
+class Intent(BaseModel):
+    """Intent: An immutable submission of a Transformation for execution."""
+    id: UUID = Field(..., description="Unique identifier for the intent")
+    transformation: Transformation = Field(..., description="Transformation to execute")
+    submitted_at: datetime = Field(..., description="Submission timestamp")
+    version: int = Field(1, description="Version number (incremented for new intents)")
+
+    model_config = ConfigDict(frozen=True)
+
 class Result(BaseModel):
-    """Result of an intent or operation."""
-    status: str = "ok"
-    detail: str = ""
+    """Result: Outcome of an intent execution."""
+    id: UUID = Field(..., description="Unique identifier for the result")
+    intent_id: UUID = Field(..., description="UUID of the submitted intent/transformation")
+    status: Literal["success", "failure", "pending"] = Field(..., description="Result status")
+    output: dict[str, Any] | None = Field(None, description="Result data, new Primitives, logs")
+    error: str | None = Field(None, description="Error message if failed")
+    timestamp: datetime = Field(..., description="Completion timestamp")
 
 # Example usage:
 # from gnosiscore.primitives.models import Perception
