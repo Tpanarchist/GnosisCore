@@ -1,6 +1,7 @@
 import pytest
-from uuid import uuid4, UUID
+from uuid import uuid4
 from typing import Any, Dict
+from datetime import datetime, timezone
 from gnosiscore.primitives.models import (
     Boundary,
     Primitive,
@@ -10,26 +11,15 @@ from gnosiscore.primitives.models import (
     Metadata,
 )
 from gnosiscore.planes.digital import DigitalPlane
-from gnosiscore.planes.mental import MentalPlane
+from gnosiscore.planes.mental import MentalPlane, MemorySubsystem, SelfMap
 from gnosiscore.planes.metaphysical import MetaphysicalPlane
-
-class MemorySubsystem:
-    def __init__(self) -> None:
-        self.stored: list[Any] = []
-    def insert_memory(self, item: Any) -> None:
-        self.stored.append(item)
-
-class SelfMap:
-    def __init__(self) -> None:
-        self.updated: list[Any] = []
-    def update(self, node: Any) -> None:
-        self.updated.append(node)
 
 @pytest.fixture
 def boundary() -> Boundary:
+    now = datetime.now(timezone.utc)
     meta = Metadata(
-        created_at=None,
-        updated_at=None,
+        created_at=now,
+        updated_at=now,
         provenance=[],
         confidence=1.0,
     )
@@ -43,9 +33,10 @@ def boundary() -> Boundary:
 
 @pytest.fixture
 def primitive() -> Primitive:
+    now = datetime.now(timezone.utc)
     meta = Metadata(
-        created_at=None,
-        updated_at=None,
+        created_at=now,
+        updated_at=now,
         provenance=[],
         confidence=1.0,
     )
@@ -58,9 +49,10 @@ def primitive() -> Primitive:
 
 @pytest.fixture
 def pattern() -> Pattern:
+    now = datetime.now(timezone.utc)
     meta = Metadata(
-        created_at=None,
-        updated_at=None,
+        created_at=now,
+        updated_at=now,
         provenance=[],
         confidence=1.0,
     )
@@ -73,9 +65,10 @@ def pattern() -> Pattern:
 
 @pytest.fixture
 def identity() -> Identity:
+    now = datetime.now(timezone.utc)
     meta = Metadata(
-        created_at=None,
-        updated_at=None,
+        created_at=now,
+        updated_at=now,
         provenance=[],
         confidence=1.0,
     )
@@ -88,9 +81,10 @@ def identity() -> Identity:
 
 @pytest.fixture
 def transformation() -> Transformation:
+    now = datetime.now(timezone.utc)
     meta = Metadata(
-        created_at=None,
-        updated_at=None,
+        created_at=now,
+        updated_at=now,
         provenance=[],
         confidence=1.0,
     )
