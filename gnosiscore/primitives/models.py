@@ -12,7 +12,7 @@ References:
 """
 
 from pydantic import BaseModel, Field
-from typing import Any, Dict, List, Optional, ClassVar
+from typing import Any, Dict, ClassVar
 from typing import Literal
 from uuid import UUID
 from datetime import datetime
@@ -21,7 +21,7 @@ class Metadata(BaseModel):
     """Metadata for all primitives, including provenance and confidence."""
     created_at: datetime = Field(..., description="Timestamp of creation")
     updated_at: datetime = Field(..., description="Timestamp of last update")
-    provenance: List[UUID] = Field(default_factory=list, description="References for provenance")
+    provenance: list[UUID] = Field(default_factory=list, description="References for provenance") # type: ignore
     confidence: float = Field(1.0, ge=0.0, le=1.0, description="Confidence score between 0 and 1")
 
 class Primitive(BaseModel):
