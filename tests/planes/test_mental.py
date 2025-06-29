@@ -262,3 +262,66 @@ def test_submit_intent_thread_safe(mental_plane, transformation):
         t.join()
     from gnosiscore.primitives.models import Result
     assert all(isinstance(r, Result) for r in results)
+
+def test_get_update_self_node_keyerror(mental_plane):
+    import uuid
+    fake_id = uuid.uuid4()
+    # get_self_node should raise KeyError
+    with pytest.raises(KeyError):
+        mental_plane.get_self_node(fake_id)
+    # update_self_node should raise KeyError
+    from gnosiscore.primitives.models import Primitive, Metadata
+    from datetime import datetime
+    fake_primitive = Primitive(
+        id=fake_id,
+        metadata=Metadata(
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            provenance=[],
+            confidence=1.0,
+        ),
+        content={}
+    )
+    with pytest.raises(KeyError):
+        mental_plane.update_self_node(fake_primitive)
+
+def test_query_memory_filters(mental_plane, primitive):
+    import time
+    from gnosiscore.primitives.models import Primitive, Metadata
+    from datetime import datetime, timedelta
+    # Insert two primitives with different types, times, confidence
+    p1 = Primitive(
+        id=uuid4(),
+        metadata=Metadata(
+            created_at=datetime.utcnow() - timedelta(hours=2),
+            updated_at=datetime.utcnow() - timedelta(hours=2),
+            provenance=[],
+            confidence=0.9,
+        ),
+        content={}
+    )
+    p2 = Primitive(
+        id=uuid4(),
+        metadata=Metadata(
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            provenance=[],
+            confidence=0.5,
+        ),
+        content={}
+    )
+    mental_plane.on_event(p1)
+    mental_plane.on_event(p2)
+    # Filter by confidence
+    res = mental_plane.query_memory(min_confidence=0.8)
+    assert p1.id in [x.id for x in res]
+    assert p2.id not in [x.id for x in res]
+    # Filter by time
+    after = datetime.utcnow() - timedelta(hours=1)
+    res2 = mental_plane.query_memory(after=after)
+    assert p2.id in [x.id for x in res2]
+    assert p1.id not in [x.id for x in res2]
+    # Filter by custom predicate
+    res3 = mental_plane.query_memory(custom=lambda x: x.metadata.confidence < 0.7)
+    assert p2.id in [x.id for x in res3]
+    assert p1.id not in [x.id for x in res3]
