@@ -3,6 +3,7 @@ from uuid import uuid4
 from datetime import datetime, timezone
 from gnosiscore.memory.subsystem import MemorySubsystem
 from gnosiscore.selfmap.map import SelfMap
+from gnosiscore.planes.learning_feedback import LearningFeedbackManager
 import logging
 
 class MentalPlane:
@@ -19,6 +20,7 @@ class MentalPlane:
         self.event_loop_id = str(owner.id)
         self.metaphysical_plane = metaphysical_plane  # AsyncMetaphysicalPlane instance
         self.qualia_log: list[Qualia] = []
+        self.feedback_manager = LearningFeedbackManager(memory, selfmap)
 
     async def get_archetype(self, id):
         """
@@ -82,6 +84,7 @@ class MentalPlane:
             content={"result": result.model_dump()}
         )
         self.qualia_log.append(qualia)
+        self.feedback_manager.on_qualia(qualia)
 
     def get_emotional_state(self) -> dict:
         """Summarize recent qualia (average valence/intensity, count by modality)."""
@@ -120,6 +123,7 @@ class MentalPlane:
         # Handle Qualia as a special event (could influence state)
         if isinstance(event, Qualia):
             self.qualia_log.append(event)
+            self.feedback_manager.on_qualia(event)
             return
 
         memory_inserted = False

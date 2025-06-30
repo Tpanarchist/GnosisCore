@@ -11,36 +11,37 @@ from gnosiscore.selfmap.map import SelfMap
 
 class DummyMemory(MemorySubsystem):
     def __init__(self):
-        self._mem = []
+        self._mem = {}
     def query(self, **kwargs):
         custom = kwargs.get("custom")
+        values = list(self._mem.values())
         if custom:
-            return [m for m in self._mem if custom(m)]
-        return list(self._mem)
+            return [m for m in values if custom(m)]
+        return values
     def insert_memory(self, primitive):
-        self._mem.append(primitive)
+        self._mem[primitive.id] = primitive
     def update_memory(self, primitive):
-        for i, m in enumerate(self._mem):
-            if m.id == primitive.id:
-                self._mem[i] = primitive
+        self._mem[primitive.id] = primitive
     def remove_memory(self, uid):
-        self._mem = [m for m in self._mem if m.id != uid]
+        if uid in self._mem:
+            del self._mem[uid]
+    def get_memory(self, uid):
+        if uid in self._mem:
+            return self._mem[uid]
+        raise KeyError
 
 class DummySelfMap(SelfMap):
     def __init__(self):
-        self._nodes = []
+        self._nodes = {}
     def all_nodes(self):
-        return list(self._nodes)
+        return list(self._nodes.values())
     def add_node(self, primitive):
-        self._nodes.append(primitive)
+        self._nodes[primitive.id] = primitive
     def update_node(self, primitive):
-        for i, n in enumerate(self._nodes):
-            if n.id == primitive.id:
-                self._nodes[i] = primitive
+        self._nodes[primitive.id] = primitive
     def get_node(self, uid):
-        for n in self._nodes:
-            if n.id == uid:
-                return n
+        if uid in self._nodes:
+            return self._nodes[uid]
         raise KeyError
 
 @pytest.fixture
@@ -59,9 +60,9 @@ def mental_plane():
     selfmap = DummySelfMap()
     return MentalPlane(owner, boundary, memory, selfmap)
 
-def make_primitive():
+def make_primitive(id=None):
     return Primitive(
-        id=uuid4(),
+        id=id or uuid4(),
         metadata=Metadata(created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)),
         content={"test": True}
     )
@@ -180,3 +181,48 @@ def test_on_result_records_qualia(mental_plane):
     qualia = mental_plane.qualia_log[0]
     assert qualia.valence == -1.0
     assert qualia.modality == "transformation"
+
+def test_learning_feedback_salience_update_and_recall(mental_plane):
+    # Insert separate primitives with the same id into memory and selfmap
+    shared_id = uuid4()
+    prim_mem = make_primitive(id=shared_id)
+    prim_selfmap = make_primitive(id=shared_id)
+    mental_plane.memory.insert_memory(prim_mem)
+    mental_plane.selfmap.add_node(prim_selfmap)
+
+    # Positive qualia: should increase salience
+    result_pos = Result(
+        id=uuid4(),
+        intent_id=uuid4(),
+        status="success",
+        output={"confidence": 1.0},
+        error=None,
+        timestamp=datetime.now(timezone.utc)
+    )
+    mental_plane.record_qualia(result_pos, about=shared_id, modality="testmodality")
+    # Check salience increased from default (1.0)
+    mem = mental_plane.memory.query(custom=lambda m: m.id == shared_id)[0]
+    node = [n for n in mental_plane.selfmap.all_nodes() if n.id == shared_id][0]
+    assert mem.content.get("salience", 1.0) > 1.0
+    assert node.content.get("salience", 1.0) > 1.0
+
+    # Negative qualia: should decrease salience
+    result_neg = Result(
+        id=uuid4(),
+        intent_id=uuid4(),
+        status="failure",
+        output={"confidence": 1.0},
+        error="fail",
+        timestamp=datetime.now(timezone.utc)
+    )
+    mental_plane.record_qualia(result_neg, about=shared_id, modality="testmodality")
+    mem2 = mental_plane.memory.query(custom=lambda m: m.id == shared_id)[0]
+    node2 = [n for n in mental_plane.selfmap.all_nodes() if n.id == shared_id][0]
+    assert mem2.content.get("salience", 1.0) < mem.content.get("salience", 1.0)
+    assert node2.content.get("salience", 1.0) < node.content.get("salience", 1.0)
+
+    # Salience-weighted recall
+    salient_mems = mental_plane.feedback_manager.get_salient_memories(top_n=1)
+    salient_nodes = mental_plane.feedback_manager.get_salient_nodes(top_n=1)
+    assert salient_mems[0].id == shared_id
+    assert salient_nodes[0].id == shared_id
