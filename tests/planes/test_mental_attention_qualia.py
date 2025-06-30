@@ -60,12 +60,125 @@ def mental_plane():
     selfmap = DummySelfMap()
     return MentalPlane(owner, boundary, memory, selfmap)
 
-def make_primitive(id=None):
+def make_primitive(
+    id=None,
+    salience=1.0,
+    modality="default",
+    updated_at=None,
+    extra_content=None,
+):
+    content = {"salience": salience, "modality": modality}
+    if extra_content:
+        content.update(extra_content)
     return Primitive(
         id=id or uuid4(),
-        metadata=Metadata(created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)),
-        content={"test": True}
+        metadata=Metadata(
+            created_at=datetime.now(timezone.utc),
+            updated_at=updated_at or datetime.now(timezone.utc),
+        ),
+        content=content,
     )
+
+@pytest.mark.asyncio
+async def test_adaptive_recall_top_n_salience_recency_qualia(mental_plane):
+    # Insert primitives with varying salience and recency
+    now = datetime.now(timezone.utc)
+    ids = [uuid4() for _ in range(4)]
+    prims = [
+        make_primitive(id=ids[0], salience=0.2, modality="visual", updated_at=now),
+        make_primitive(id=ids[1], salience=0.9, modality="visual", updated_at=now),
+        make_primitive(id=ids[2], salience=0.7, modality="audio", updated_at=now),
+        make_primitive(id=ids[3], salience=0.8, modality="visual", updated_at=now),
+    ]
+    for p in prims:
+        mental_plane.memory.insert_memory(p)
+        mental_plane.selfmap.add_node(p)
+    # Add qualia: positive for ids[1], negative for ids[3]
+    qpos = Qualia(
+        id=uuid4(),
+        metadata=Metadata(created_at=now, updated_at=now),
+        valence=1.0,
+        intensity=1.0,
+        modality="visual",
+        about=ids[1],
+        content={},
+    )
+    qneg = Qualia(
+        id=uuid4(),
+        metadata=Metadata(created_at=now, updated_at=now),
+        valence=-1.0,
+        intensity=1.0,
+        modality="visual",
+        about=ids[3],
+        content={},
+    )
+    mental_plane.qualia_log.extend([qpos, qneg])
+    # Should return top 3 by salience+qualia+recency
+    results = await mental_plane.adaptive_recall(top_n=3)
+    result_ids = [p.id for p in results]
+    assert ids[1] in result_ids  # high salience, positive qualia
+    assert len(result_ids) == 3
+
+@pytest.mark.asyncio
+async def test_adaptive_recall_modality_and_thresholds(mental_plane):
+    now = datetime.now(timezone.utc)
+    prims = [
+        make_primitive(salience=0.6, modality="visual", updated_at=now),
+        make_primitive(salience=0.4, modality="audio", updated_at=now),
+        make_primitive(salience=0.8, modality="visual", updated_at=now),
+    ]
+    for p in prims:
+        mental_plane.memory.insert_memory(p)
+        mental_plane.selfmap.add_node(p)
+    # Modality filter
+    results = await mental_plane.adaptive_recall(modality="visual")
+    assert all(p.content["modality"] == "visual" for p in results)
+    # Min salience
+    results = await mental_plane.adaptive_recall(min_salience=0.7)
+    assert all(p.content["salience"] >= 0.7 for p in results)
+    # Recency filter
+    old_time = now.replace(year=now.year - 1)
+    old_prim = make_primitive(salience=0.9, modality="visual", updated_at=old_time)
+    mental_plane.memory.insert_memory(old_prim)
+    mental_plane.selfmap.add_node(old_prim)
+    results = await mental_plane.adaptive_recall(since=now)
+    assert all(p.metadata.updated_at >= now for p in results)
+
+@pytest.mark.asyncio
+async def test_adaptive_recall_attention_bias(mental_plane):
+    now = datetime.now(timezone.utc)
+    ids = [uuid4() for _ in range(2)]
+    prims = [
+        make_primitive(id=ids[0], salience=0.5, modality="visual", updated_at=now),
+        make_primitive(id=ids[1], salience=0.5, modality="visual", updated_at=now),
+    ]
+    for p in prims:
+        mental_plane.memory.insert_memory(p)
+        mental_plane.selfmap.add_node(p)
+    attn = Attention(
+        id=uuid4(),
+        metadata=Metadata(created_at=now, updated_at=now),
+        subject="",
+        object=ids[1],
+        intensity=1.0,
+        duration=1.0,
+        content={},
+    )
+    results = await mental_plane.adaptive_recall(top_n=1, attention_bias=attn)
+    assert results[0].id == ids[1]
+
+@pytest.mark.asyncio
+async def test_adaptive_recall_edge_cases(mental_plane):
+    # Empty memory/selfmap
+    results = await mental_plane.adaptive_recall()
+    assert results == []
+    # All below threshold
+    now = datetime.now(timezone.utc)
+    prim = make_primitive(salience=0.1, modality="visual", updated_at=now)
+    mental_plane.memory.insert_memory(prim)
+    mental_plane.selfmap.add_node(prim)
+    results = await mental_plane.adaptive_recall(min_salience=0.5)
+    assert results == []
 
 @pytest.mark.asyncio
 async def test_attend_filters_memory_and_selfmap(mental_plane):
@@ -226,3 +339,161 @@ def test_learning_feedback_salience_update_and_recall(mental_plane):
     salient_nodes = mental_plane.feedback_manager.get_salient_nodes(top_n=1)
     assert salient_mems[0].id == shared_id
     assert salient_nodes[0].id == shared_id
+
+def test_salience_decay_and_floor(mental_plane):
+    # Insert primitives with known salience
+    prim1 = make_primitive(salience=0.8)
+    prim2 = make_primitive(salience=0.2)
+    mental_plane.memory.insert_memory(prim1)
+    mental_plane.memory.insert_memory(prim2)
+    mental_plane.selfmap.add_node(prim1)
+    mental_plane.selfmap.add_node(prim2)
+    # Decay with floor
+    events = mental_plane.decay_salience(decay_rate=0.1, floor=0.15)
+    for e in events:
+        assert e.after <= e.before
+        assert e.after >= 0.15
+    # No double decay: call again, values decrease further but not below floor
+    events2 = mental_plane.decay_salience(decay_rate=0.1, floor=0.15)
+    for e in events2:
+        assert e.after <= e.before
+        assert e.after >= 0.15
+    # Floor test: salience at floor does not drop
+    prim3 = make_primitive(salience=0.15)
+    mental_plane.memory.insert_memory(prim3)
+    mental_plane.selfmap.add_node(prim3)
+    events3 = mental_plane.decay_salience(decay_rate=0.1, floor=0.15)
+    for e in events3:
+        assert e.after >= 0.15
+    # Reinforcement: manually increase salience, decay again, stays higher
+    prim1.content["salience"] = 0.9
+    events4 = mental_plane.decay_salience(decay_rate=0.1, floor=0.15)
+    found = [e for e in events4 if e.node_id == prim1.id]
+    assert found and found[0].after > 0.15
+
+def test_emotional_drive_summary_and_prioritization(mental_plane):
+    # Insert qualia with mixed valence/modalities
+    now = datetime.now(timezone.utc)
+    q1 = Qualia(
+        id=uuid4(),
+        metadata=Metadata(created_at=now, updated_at=now),
+        valence=1.0,
+        intensity=0.9,
+        modality="visual",
+        about=uuid4(),
+        content={},
+    )
+    q2 = Qualia(
+        id=uuid4(),
+        metadata=Metadata(created_at=now, updated_at=now),
+        valence=-0.5,
+        intensity=0.7,
+        modality="audio",
+        about=uuid4(),
+        content={},
+    )
+    q3 = Qualia(
+        id=uuid4(),
+        metadata=Metadata(created_at=now, updated_at=now),
+        valence=0.8,
+        intensity=0.8,
+        modality="visual",
+        about=uuid4(),
+        content={},
+    )
+    mental_plane.qualia_log.extend([q1, q2, q3])
+    summary = mental_plane.get_emotional_drive()
+    assert summary.dominant_modality in {"visual", "audio"}
+    assert abs(summary.dominant_valence) <= 1.0
+    # Prioritize by emotion
+    candidates = [
+        make_primitive(modality="visual"),
+        make_primitive(modality="audio"),
+    ]
+    prioritized = mental_plane.prioritize_by_emotion(candidates, drive_bias=0.7)
+    assert prioritized[0].content["modality"] == summary.dominant_modality
+    # Recent qualia limit
+    for i in range(15):
+        q = Qualia(
+            id=uuid4(),
+            metadata=Metadata(created_at=now, updated_at=now),
+            valence=1.0,
+            intensity=1.0,
+            modality="visual",
+            about=uuid4(),
+            content={},
+        )
+        mental_plane.qualia_log.append(q)
+    summary2 = mental_plane.get_emotional_drive()
+    assert len(summary2.recent_qualia) <= 10
+
+def test_meta_cognitive_self_reflection_and_goal_replanning(mental_plane):
+    # Insert events and qualia for self_reflection
+    now = datetime.now(timezone.utc)
+    for i in range(10):
+        q = Qualia(
+            id=uuid4(),
+            metadata=Metadata(created_at=now, updated_at=now),
+            valence=(-1.0 if i < 5 else 1.0),
+            intensity=1.0,
+            modality="visual",
+            about=uuid4(),
+            content={},
+        )
+        mental_plane.qualia_log.append(q)
+    summary = mental_plane.self_reflection()
+    assert "top_qualia" in summary
+    assert "emotional_shift" in summary
+    # Goal replanning: negative trend triggers replanning
+    mental_plane.qualia_log.clear()
+    for i in range(10):
+        q = Qualia(
+            id=uuid4(),
+            metadata=Metadata(created_at=now, updated_at=now),
+            valence=-1.0,
+            intensity=1.0,
+            modality="visual",
+            about=uuid4(),
+            content={},
+        )
+        mental_plane.qualia_log.append(q)
+    triggered = mental_plane.goal_replanning(negative_threshold=-0.5)
+    assert triggered is True
+    # Salience/qualia sync
+    flagged = mental_plane.salience_qualia_sync()
+    assert set(flagged) == set(q.about for q in mental_plane.qualia_log)
+
+@pytest.mark.asyncio
+async def test_full_cycle_simulation(mental_plane):
+    # Insert events
+    now = datetime.now(timezone.utc)
+    prim = make_primitive(salience=0.9, modality="visual", updated_at=now)
+    mental_plane.memory.insert_memory(prim)
+    mental_plane.selfmap.add_node(prim)
+    # Record qualia
+    q = Qualia(
+        id=uuid4(),
+        metadata=Metadata(created_at=now, updated_at=now),
+        valence=1.0,
+        intensity=1.0,
+        modality="visual",
+        about=prim.id,
+        content={},
+    )
+    mental_plane.qualia_log.append(q)
+    # Adaptive recall
+    results = await mental_plane.adaptive_recall(top_n=1)
+    assert results and results[0].id == prim.id
+    # Salience decay
+    events = mental_plane.decay_salience(decay_rate=0.2, floor=0.1)
+    for e in events:
+        assert e.after >= 0.1
+    # Emotional drive
+    summary = mental_plane.get_emotional_drive()
+    assert summary.dominant_modality == "visual"
+    # Meta-cognitive loop
+    reflection = mental_plane.self_reflection()
+    assert "top_qualia" in reflection
+    # Regression: recall after cycles
+    results2 = await mental_plane.adaptive_recall(top_n=1)
+    assert results2 and results2[0].id == prim.id
