@@ -144,6 +144,31 @@ class Belief(Primitive):
 
 from pydantic import ConfigDict
 
+# --- Advanced Attention & Learning API Models ---
+
+from typing import Optional, List
+
+class SalienceDecayEvent(BaseModel):
+    node_id: UUID
+    before: float = Field(..., description="Salience before decay")
+    after: float = Field(..., description="Salience after decay")
+    timestamp: datetime
+
+class AdaptiveRecallQuery(BaseModel):
+    top_n: int = Field(5, ge=1)
+    modality: Optional[str] = None
+    min_salience: float = Field(0.0, ge=0.0, le=10.0)
+    since: Optional[datetime] = None
+    qualia_weight: float = Field(0.5, ge=0.0, le=1.0)
+    attention_bias: Optional["Attention"] = None
+
+class EmotionalDriveSummary(BaseModel):
+    dominant_valence: float
+    dominant_modality: str
+    intensity: float
+    recent_qualia: List["Qualia"]
+    updated_at: datetime
+
 class Intent(BaseModel):
     """Intent: An immutable submission of a Transformation for execution."""
     id: UUID = Field(..., description="Unique identifier for the intent")

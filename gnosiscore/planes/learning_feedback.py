@@ -100,3 +100,45 @@ class LearningFeedbackManager:
         nodes = self.selfmap.all_nodes()
         nodes = sorted(nodes, key=lambda n: float(n.content.get("salience", 1.0)), reverse=True)
         return nodes[:top_n]
+
+    def decay_salience(self, decay_rate: float = 0.01, floor: float = 0.0) -> list:
+        """
+        Decrease salience for all eligible memories/nodes according to exponential decay or fixed rate.
+        Returns a list of SalienceDecayEvent.
+        """
+        from gnosiscore.primitives.models import SalienceDecayEvent
+        from datetime import datetime, timezone
+
+        events = []
+        now = datetime.now(timezone.utc)
+        # Decay for memory
+        for primitive in self.memory.query():
+            old_salience = float(primitive.content.get("salience", 1.0))
+            new_salience = max(floor, old_salience * (1 - decay_rate))
+            if new_salience != old_salience:
+                content = dict(primitive.content)
+                content["salience"] = new_salience
+                updated = primitive.model_copy(update={"content": content})
+                self.memory.update_memory(updated)
+                events.append(SalienceDecayEvent(
+                    node_id=primitive.id,
+                    before=old_salience,
+                    after=new_salience,
+                    timestamp=now
+                ))
+        # Decay for selfmap nodes
+        for primitive in self.selfmap.all_nodes():
+            old_salience = float(primitive.content.get("salience", 1.0))
+            new_salience = max(floor, old_salience * (1 - decay_rate))
+            if new_salience != old_salience:
+                content = dict(primitive.content)
+                content["salience"] = new_salience
+                updated = primitive.model_copy(update={"content": content})
+                self.selfmap.update_node(updated)
+                events.append(SalienceDecayEvent(
+                    node_id=primitive.id,
+                    before=old_salience,
+                    after=new_salience,
+                    timestamp=now
+                ))
+        return events
