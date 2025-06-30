@@ -1,10 +1,9 @@
-from typing import Dict, Set, Optional, Callable, Any
+import asyncio
+from typing import Dict, Set, Optional, Callable, Any, Awaitable, Tuple
 from uuid import UUID, uuid4
-from threading import Lock
-from queue import Queue, Empty
-from datetime import datetime
-
+from datetime import datetime, timezone
 from gnosiscore.primitives.models import Boundary, Primitive, Transformation, Intent, Result
+from gnosiscore.transformation.registry import TransformationHandlerRegistry
 
 # Forward reference for MentalPlane (to avoid circular import)
 class MentalPlane:
@@ -18,185 +17,132 @@ class DigitalPlane:
     DigitalPlane hosts all digital entities and their state.
     Enforces boundaries, manages spatial/temporal structures,
     and propagates events to subscribed MentalPlanes.
+    Also orchestrates async intent execution via event loop.
     """
-    def __init__(self, id: UUID, boundary: Boundary):
+    def __init__(self, id: UUID, boundary: Boundary, concurrent: bool = False):
         self.id = id
         self.boundary = boundary
         self._entities: Dict[UUID, Primitive] = {}
-        self._subscribers: Set[MentalPlane] = set()
-        self._lock = Lock()
+        self._subscribers: Set[Any] = set()
         self.on_persist: Optional[Callable[[Primitive], None]] = None
 
-        # Intent processing
-        self._intent_queue: "Queue[tuple[Intent, MentalPlane]]" = Queue()
-        self._result_registry: Dict[UUID, Result] = {}
-        self._result_callbacks: Dict[UUID, Callable[[Result], None]] = {}
+        # Async intent processing
+        self.intent_queue: asyncio.Queue[Tuple[Intent, Optional[Callable[[Result], Awaitable[None]]]]] = asyncio.Queue()
+        self.result_map: Dict[UUID, Result] = {}
+        self._callback_map: Dict[UUID, Callable[[Result], Awaitable[None]]] = {}
+        self._event_loop_task: Optional[asyncio.Task[None]] = None
+        self._async_subscribers: Set[Callable[[Result], Awaitable[None]]] = set()
+        self._running = False
+        self._concurrent = concurrent
 
+        # Registry for transformation handlers
+        self.handler_registry = TransformationHandlerRegistry()
+
+    # --- Entity/event legacy sync API (unchanged) ---
     def register_entity(self, primitive: Primitive) -> None:
-        with self._lock:
-            # TODO: Implement boundary enforcement logic
-            self._entities[primitive.id] = primitive
-            if self.on_persist:
-                self.on_persist(primitive)
+        self._entities[primitive.id] = primitive
+        if self.on_persist:
+            self.on_persist(primitive)
 
     def get_entity(self, entity_id: UUID) -> Primitive:
-        with self._lock:
-            return self._entities[entity_id]
+        return self._entities[entity_id]
 
     def remove_entity(self, entity_id: UUID) -> None:
-        with self._lock:
-            if entity_id in self._entities:
-                del self._entities[entity_id]
+        if entity_id in self._entities:
+            del self._entities[entity_id]
 
     def publish_event(self, event: Primitive) -> None:
-        with self._lock:
-            for subscriber in self._subscribers:
+        for subscriber in self._subscribers:
+            if hasattr(subscriber, "on_event"):
                 subscriber.on_event(event)
 
-    def submit_intent(self, intent: Intent, mental_plane: "MentalPlane", callback: Optional[Callable[[Result], None]] = None) -> Result:
+    def subscribe(self, subscriber: Any) -> None:
+        self._subscribers.add(subscriber)
+
+    def unsubscribe(self, subscriber: Any) -> None:
+        self._subscribers.discard(subscriber)
+
+    # --- Async intent/event loop API ---
+    async def submit_intent(self, intent: Intent, callback: Optional[Callable[[Result], Awaitable[None]]] = None):
         """
-        Submit an Intent for processing. Returns a pending Result.
-        Optionally registers a callback for result delivery.
+        Submit an Intent for async processing. Optionally provide an async callback.
         """
-        with self._lock:
-            pending_result = Result(
+        pending_result = Result(
+            id=uuid4(),
+            intent_id=intent.id,
+            status="pending",
+            output=None,
+            error=None,
+            timestamp=datetime.now(timezone.utc),
+        )
+        self.result_map[intent.id] = pending_result
+        if callback:
+            self._callback_map[intent.id] = callback
+        await self.intent_queue.put((intent, callback))
+
+    async def event_loop(self):
+        """
+        Async event loop for processing intents.
+        """
+        self._running = True
+        while self._running:
+            try:
+                item = await self.intent_queue.get()
+            except Exception:
+                continue
+            if item is None:
+                self._running = False
+                self.intent_queue.task_done()
+                break
+            intent, callback = item
+            if self._concurrent:
+                asyncio.create_task(self._process_intent(intent, callback))
+            else:
+                await self._process_intent(intent, callback)
+            self.intent_queue.task_done()
+
+    async def _process_intent(self, intent: Intent, callback: Optional[Callable[[Result], Awaitable[None]]]):
+        try:
+            result = await self.handler_registry.handle(intent.transformation)
+        except Exception as e:
+            result = Result(
                 id=uuid4(),
                 intent_id=intent.id,
-                status="pending",
+                status="failure",
                 output=None,
-                error=None,
-                timestamp=datetime.utcnow(),
+                error=str(e),
+                timestamp=datetime.now(timezone.utc),
             )
-            self._result_registry[intent.id] = pending_result
-            if callback:
-                self._result_callbacks[intent.id] = callback
-            self._intent_queue.put((intent, mental_plane))
-        return pending_result
+        self.result_map[intent.id] = result
 
-    def process_intents(self) -> None:
-        """
-        Process all queued intents (synchronously).
-        For each, produce a Result and notify the submitter.
-        """
-        while True:
-            try:
-                intent, mental_plane = self._intent_queue.get_nowait()
-            except Empty:
-                break
-            try:
-                result = self._execute_intent(intent)
-            except Exception as e:
-                from uuid import uuid4
-                from datetime import datetime, timezone
-                result = Result(
-                    id=uuid4(),
-                    intent_id=intent.id,
-                    status="failure",
-                    output=None,
-                    error=str(e),
-                    timestamp=datetime.now(timezone.utc),
-                )
-            with self._lock:
-                self._result_registry[intent.id] = result
-                cb = self._result_callbacks.pop(intent.id, None)
-            # Deliver result
-            if cb:
-                cb(result)
-            elif hasattr(mental_plane, "on_result"):
-                mental_plane.on_result(result)
-            # else: result can be polled
+        # Deliver result via callback if provided
+        cb = callback or self._callback_map.pop(intent.id, None)
+        if cb:
+            await cb(result)
+        # Notify async subscribers
+        for subscriber in self._async_subscribers:
+            await subscriber(result)
 
     def poll_result(self, intent_id: UUID) -> Optional[Result]:
         """
         Poll for the result of a submitted intent.
         """
-        with self._lock:
-            return self._result_registry.get(intent_id)
+        return self.result_map.get(intent_id)
 
-    def _execute_intent(self, intent: Intent) -> Result:
+    def subscribe_async(self, subscriber: Callable[[Result], Awaitable[None]]):
         """
-        Actually perform the transformation. Returns a Result.
-        Supports LLM-backed transformations if llm_params is present.
+        Subscribe an async callable to receive all Results.
         """
-        import os
-        import httpx
-        from gnosiscore.primitives.models import LLMParams
+        self._async_subscribers.add(subscriber)
 
-        transformation = intent.transformation
-        content = transformation.content
-        llm_params_dict = content.get("llm_params")
-        provenance = {
-            "intent_id": str(intent.id),
-            "submitted_at": str(intent.submitted_at),
-            "llm_params": llm_params_dict,
-            "operation": content.get("operation"),
-            "parameters": content.get("parameters"),
-        }
-        try:
-            if llm_params_dict is not None:
-                # Validate llm_params as LLMParams
-                llm_params = LLMParams(**llm_params_dict)
-                api_key = os.environ.get("OPENAI_API_KEY")
-                if not api_key:
-                    raise RuntimeError("OPENAI_API_KEY not set in environment")
-                # Compose OpenAI API call (sync for now)
-                url = "https://api.openai.com/v1/chat/completions"
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                }
-                payload = {
-                    "model": llm_params.model,
-                    "messages": [
-                        {"role": "system", "content": llm_params.system_prompt or ""},
-                        {"role": "user", "content": llm_params.user_prompt},
-                    ],
-                    "temperature": llm_params.temperature,
-                    "max_tokens": llm_params.max_tokens,
-                }
-                # Add any extra OpenAI params
-                payload.update(llm_params.extra_params)
-                # Add optional fields if present
-                if llm_params.top_p is not None:
-                    payload["top_p"] = llm_params.top_p
-                if llm_params.stop is not None:
-                    payload["stop"] = llm_params.stop
-                with httpx.Client(timeout=30.0) as client:
-                    resp = client.post(url, headers=headers, json=payload)
-                    resp.raise_for_status()
-                    data = resp.json()
-                output = {
-                    "llm_response": data,
-                    "transformation": content,
-                }
-                status = "success"
-                error = None
-                provenance["llm_request"] = payload
-                provenance["llm_response"] = data
-            else:
-                # Local logic
-                output = {"transformation": content}
-                status = "success"
-                error = None
-        except Exception as e:
-            output = None
-            status = "failure"
-            error = str(e)
-            provenance["error"] = error
-        from datetime import datetime, timezone
-        return Result(
-            id=uuid4(),
-            intent_id=intent.id,
-            status=status,
-            output=output,
-            error=error,
-            timestamp=datetime.now(timezone.utc),
-        )
+    def unsubscribe_async(self, subscriber: Callable[[Result], Awaitable[None]]):
+        self._async_subscribers.discard(subscriber)
 
-    def subscribe(self, mental_plane: 'MentalPlane') -> None:
-        with self._lock:
-            self._subscribers.add(mental_plane)
-
-    def unsubscribe(self, mental_plane: 'MentalPlane') -> None:
-        with self._lock:
-            self._subscribers.discard(mental_plane)
+    async def shutdown(self):
+        """
+        Gracefully shut down the event loop.
+        """
+        self._running = False
+        await self.intent_queue.put(None)
+        if self._event_loop_task:
+            await self._event_loop_task
