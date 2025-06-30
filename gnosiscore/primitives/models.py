@@ -62,7 +62,17 @@ class Memory(Primitive):
     """Primitive representing a memory record."""
     type: ClassVar[Literal["Memory"]] = "Memory"
 
-from typing import Optional
+from typing import Optional, Dict
+
+class LLMParams(BaseModel):
+    model: str = Field(..., description="Model name, e.g. 'gpt-4o-mini'")
+    system_prompt: Optional[str] = None
+    user_prompt: str
+    temperature: Optional[float] = 0.2
+    max_tokens: Optional[int] = 256
+    top_p: Optional[float] = None
+    stop: Optional[str] = None
+    extra_params: Dict[str, Any] = Field(default_factory=dict)
 
 class Transformation(Primitive):
     """Primitive representing a transformation or operation.
@@ -71,7 +81,7 @@ class Transformation(Primitive):
         - operation: str (e.g., "add_node", "update_value", "remove_entity")
         - target: UUID or list[UUID] (references affected)
         - parameters: dict (arbitrary operation details)
-        - llm_params: Optional[dict] (OpenAI API config, or None for local logic)
+        - llm_params: Optional[LLMParams] (OpenAI API config, or None for local logic)
         - (optional: initiator, provenance, timestamp, etc.)
     """
     type: ClassVar[Literal["Transformation"]] = "Transformation"
@@ -84,7 +94,7 @@ class Transformation(Primitive):
         operation: str,
         target: Any,
         parameters: dict[str, Any],
-        llm_params: Optional[dict[str, Any]] = None,
+        llm_params: Optional["LLMParams"] = None,
         **kwargs: Any
     ):
         content: dict[str, Any] = {
@@ -93,7 +103,7 @@ class Transformation(Primitive):
             "parameters": parameters,
         }
         if llm_params is not None:
-            content["llm_params"] = llm_params
+            content["llm_params"] = llm_params.model_dump()
         content.update(kwargs)
         return cls(id=id, metadata=metadata, content=content)
 

@@ -120,40 +120,47 @@ class DigitalPlane:
         """
         import os
         import httpx
+        from gnosiscore.primitives.models import LLMParams
 
         transformation = intent.transformation
         content = transformation.content
-        llm_params = content.get("llm_params")
+        llm_params_dict = content.get("llm_params")
         provenance = {
             "intent_id": str(intent.id),
             "submitted_at": str(intent.submitted_at),
-            "llm_params": llm_params,
+            "llm_params": llm_params_dict,
             "operation": content.get("operation"),
             "parameters": content.get("parameters"),
         }
         try:
-            if llm_params is not None:
+            if llm_params_dict is not None:
+                # Validate llm_params as LLMParams
+                llm_params = LLMParams(**llm_params_dict)
                 api_key = os.environ.get("OPENAI_API_KEY")
                 if not api_key:
                     raise RuntimeError("OPENAI_API_KEY not set in environment")
-                # Compose OpenAI API call
+                # Compose OpenAI API call (sync for now)
                 url = "https://api.openai.com/v1/chat/completions"
                 headers = {
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 }
                 payload = {
-                    "model": llm_params.get("model", "gpt-3.5-turbo"),
+                    "model": llm_params.model,
                     "messages": [
-                        {"role": "system", "content": llm_params.get("system_prompt", "")},
-                        {"role": "user", "content": llm_params.get("user_prompt", "")},
+                        {"role": "system", "content": llm_params.system_prompt or ""},
+                        {"role": "user", "content": llm_params.user_prompt},
                     ],
+                    "temperature": llm_params.temperature,
+                    "max_tokens": llm_params.max_tokens,
                 }
                 # Add any extra OpenAI params
-                for k, v in llm_params.items():
-                    if k not in {"model", "system_prompt", "user_prompt"}:
-                        payload[k] = v
-                # Synchronous HTTP call for now
+                payload.update(llm_params.extra_params)
+                # Add optional fields if present
+                if llm_params.top_p is not None:
+                    payload["top_p"] = llm_params.top_p
+                if llm_params.stop is not None:
+                    payload["stop"] = llm_params.stop
                 with httpx.Client(timeout=30.0) as client:
                     resp = client.post(url, headers=headers, json=payload)
                     resp.raise_for_status()

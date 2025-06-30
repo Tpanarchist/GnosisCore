@@ -1,7 +1,7 @@
 import pytest
 from uuid import uuid4
 from datetime import datetime, timezone
-from gnosiscore.primitives.models import Transformation, Metadata, Intent, Result
+from gnosiscore.primitives.models import Transformation, Metadata, Intent, Result, LLMParams
 from gnosiscore.planes.digital import DigitalPlane
 from gnosiscore.planes.mental import MentalPlane
 from gnosiscore.primitives.models import Boundary, Identity, Primitive
@@ -170,13 +170,13 @@ def test_llm_transformation_local_fallback(mental_plane, digital_plane):
 def test_llm_transformation_live(monkeypatch, mental_plane, digital_plane):
     import os
     api_key = os.environ.get("OPENAI_API_KEY")
-    llm_params = {
-        "model": "gpt-3.5-turbo",
-        "system_prompt": "You are a test agent.",
-        "user_prompt": "Say hello.",
-        "temperature": 0.1,
-        "max_tokens": 8,
-    }
+    llm_params = LLMParams(
+        model="gpt-3.5-turbo",
+        system_prompt="You are a test agent.",
+        user_prompt="Say hello.",
+        temperature=0.1,
+        max_tokens=8,
+    )
     t = Transformation.create(
         id=uuid4(),
         metadata=Metadata(created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)),
@@ -203,45 +203,25 @@ def test_llm_transformation_live(monkeypatch, mental_plane, digital_plane):
     assert "llm_response" in final.output
 
 def test_llm_transformation_bad_params(monkeypatch, mental_plane, digital_plane):
-    # Simulate OpenAI error by raising in httpx.Client.post
-    llm_params = {
-        "model": "gpt-3.5-turbo",
-        "system_prompt": "You are a test agent.",
-        "user_prompt": "Say hello.",
-        "temperature": "not-a-float",  # Bad param
-    }
-    class DummyResp:
-        def raise_for_status(self): raise Exception("bad param")
-        def json(self): return {}
-    class DummyClient:
-        def __enter__(self): return self
-        def __exit__(self, exc_type, exc_val, exc_tb): pass
-        def post(self, url, headers, json): return DummyResp()
-    monkeypatch.setattr("httpx.Client", lambda *a, **kw: DummyClient())
-    t = Transformation.create(
-        id=uuid4(),
-        metadata=Metadata(created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)),
-        operation="llm",
-        target=uuid4(),
-        parameters={},
-        llm_params=llm_params
-    )
-    result = mental_plane.submit_intent(t, digital_plane)
-    digital_plane.process_intents()
-    final = digital_plane.poll_result(result.intent_id)
-    print("\n[LLM Bad Params Result]", final.status, final.output, final.error)
-    assert final.status == "failure"
-    assert final.error
+    # Should raise ValidationError at LLMParams construction
+    import pydantic
+    with pytest.raises(pydantic.ValidationError):
+        LLMParams(
+            model="gpt-3.5-turbo",
+            system_prompt="You are a test agent.",
+            user_prompt="Say hello.",
+            temperature="not-a-float",  # Bad param (will raise)
+        )
 
 def test_llm_transformation_credentials_absent(monkeypatch, mental_plane, digital_plane):
     # Unset API key and test error
     import os
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    llm_params = {
-        "model": "gpt-3.5-turbo",
-        "system_prompt": "You are a test agent.",
-        "user_prompt": "Say hello.",
-    }
+    llm_params = LLMParams(
+        model="gpt-3.5-turbo",
+        system_prompt="You are a test agent.",
+        user_prompt="Say hello.",
+    )
     t = Transformation.create(
         id=uuid4(),
         metadata=Metadata(created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)),
