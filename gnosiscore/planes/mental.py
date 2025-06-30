@@ -1,4 +1,6 @@
-from gnosiscore.primitives.models import Identity, Boundary, Primitive, Transformation, Result
+from gnosiscore.primitives.models import Identity, Boundary, Primitive, Transformation, Result, Attention, Qualia, Metadata
+from uuid import uuid4
+from datetime import datetime, timezone
 from gnosiscore.memory.subsystem import MemorySubsystem
 from gnosiscore.selfmap.map import SelfMap
 import logging
@@ -16,6 +18,7 @@ class MentalPlane:
         self.selfmap = selfmap
         self.event_loop_id = str(owner.id)
         self.metaphysical_plane = metaphysical_plane  # AsyncMetaphysicalPlane instance
+        self.qualia_log: list[Qualia] = []
 
     async def get_archetype(self, id):
         """
@@ -52,12 +55,73 @@ class MentalPlane:
         self.memory.insert_memory(primitive)
         self.selfmap.add_node(primitive)
         return primitive
+    async def attend(self, attention: Attention) -> list[Primitive]:
+        """Query memory and/or selfmap selectively using attention parameters."""
+        results = []
+        # Example: use subject/object as query keys
+        if hasattr(attention, "subject") and attention.subject:
+            results += self.memory.query(custom=lambda m: getattr(m, "id", None) == attention.subject)
+        if hasattr(attention, "object") and attention.object:
+            if attention.object == "all":
+                results += self.selfmap.all_nodes()
+            else:
+                results += [n for n in self.selfmap.all_nodes() if getattr(n, "id", None) == attention.object]
+        # Optionally filter by intensity/duration as relevance
+        return results
+
+    def record_qualia(self, result: Result, about: uuid4, modality: str = "transformation"):
+        valence = 1.0 if result.status == "success" else -1.0
+        intensity = result.output.get("confidence", 1.0) if result.output else 0.5
+        qualia = Qualia(
+            id=uuid4(),
+            metadata=Metadata(created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)),
+            valence=valence,
+            intensity=intensity,
+            modality=modality,
+            about=about,
+            content={"result": result.model_dump()}
+        )
+        self.qualia_log.append(qualia)
+
+    def get_emotional_state(self) -> dict:
+        """Summarize recent qualia (average valence/intensity, count by modality)."""
+        if not self.qualia_log:
+            return {"average_valence": 0.0, "average_intensity": 0.0, "count": 0, "by_modality": {}}
+        avg_valence = sum(q.valence for q in self.qualia_log) / len(self.qualia_log)
+        avg_intensity = sum(q.intensity for q in self.qualia_log) / len(self.qualia_log)
+        by_modality = {}
+        for q in self.qualia_log:
+            by_modality.setdefault(q.modality, []).append(q)
+        by_modality_summary = {k: len(v) for k, v in by_modality.items()}
+        return {
+            "average_valence": avg_valence,
+            "average_intensity": avg_intensity,
+            "count": len(self.qualia_log),
+            "by_modality": by_modality_summary,
+        }
 
     def on_event(self, event: Primitive) -> None:
         """
         Handle an incoming event: store to memory, update selfmap, atomically.
         If either memory or selfmap fails, roll back both or leave in consistent state.
         """
+        # Handle Attention as a special event
+        if isinstance(event, Attention):
+            # Optionally, could trigger focus logic or log attention
+            # For now, just run attend and do nothing with result
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self.attend(event))
+            except RuntimeError:
+                # No running event loop (e.g., in sync test), run synchronously
+                asyncio.run(self.attend(event))
+            return
+        # Handle Qualia as a special event (could influence state)
+        if isinstance(event, Qualia):
+            self.qualia_log.append(event)
+            return
+
         memory_inserted = False
         try:
             # Insert or update memory
@@ -107,6 +171,8 @@ class MentalPlane:
         # Default: log or store result
         import logging
         logging.info(f"MentalPlane received result: {result}")
+        # Record qualia for this result
+        self.record_qualia(result, about=result.intent_id, modality="transformation")
 
     def query_memory(self, **kwargs) -> list[Primitive]:
         """
