@@ -51,28 +51,57 @@ class AsyncMetaphysicalPlane:
     Supports async subscriptions and at-least-once delivery to all registered subscribers.
     """
     def __init__(self):
-        self._subscribers: set[Callable[[Pattern], Awaitable[None]]] = set()
+        # Subscribers: callback -> filter_fn (or None)
+        self._subscribers: dict[Callable[[Pattern], Awaitable[None]], Callable[[Pattern], bool] | None] = {}
         self._lock = asyncio.Lock()
         self._archetypes: dict[UUID, Pattern] = {}
 
-    async def subscribe(self, callback: Callable[[Pattern], Awaitable[None]]) -> None:
+    async def query_archetypes(self, *, id: UUID = None, type: str = None, tags: list[str] = None, filter_fn: Callable[["Pattern"], bool] = None) -> list["Pattern"]:
+        """
+        Query archetypes by id, type, tags, or custom filter.
+        """
         async with self._lock:
-            self._subscribers.add(callback)
+            patterns = list(self._archetypes.values())
+        results = []
+        for pattern in patterns:
+            if id is not None and pattern.id != id:
+                continue
+            if type is not None:
+                # type may be in content or as class attribute
+                pattern_type = pattern.content.get("type") or getattr(pattern, "type", None)
+                if pattern_type != type:
+                    continue
+            if tags is not None:
+                pattern_tags = pattern.content.get("tags", [])
+                if not set(tags).issubset(set(pattern_tags)):
+                    continue
+            if filter_fn is not None and not filter_fn(pattern):
+                continue
+            results.append(pattern)
+        return results
+
+    async def subscribe(self, callback: Callable[[Pattern], Awaitable[None]], filter_fn: Callable[[Pattern], bool] = None) -> None:
+        """
+        Register a subscriber callback with an optional filter function.
+        """
+        async with self._lock:
+            self._subscribers[callback] = filter_fn
 
     async def unsubscribe(self, callback: Callable[[Pattern], Awaitable[None]]) -> None:
         async with self._lock:
-            self._subscribers.discard(callback)
+            self._subscribers.pop(callback, None)
 
     async def publish_archetype(self, archetype: Pattern) -> None:
         async with self._lock:
             if archetype.id in self._archetypes:
                 raise ValueError("Archetype with this UUID already exists. Use a new UUID for new versions.")
             self._archetypes[archetype.id] = archetype
-            subscribers = list(self._subscribers)
+            subscribers = list(self._subscribers.items())
         # Deliver outside lock for isolation
-        for callback in subscribers:
+        for callback, filter_fn in subscribers:
             try:
-                await callback(archetype)
+                if filter_fn is None or filter_fn(archetype):
+                    await callback(archetype)
             except Exception:
                 # Swallow/log errors in subscriber callbacks
                 pass
@@ -82,3 +111,30 @@ class AsyncMetaphysicalPlane:
             if id not in self._archetypes:
                 raise KeyError(f"Archetype with id {id} not found")
             return self._archetypes[id]
+
+    async def instantiate_archetype(self, archetype_id: UUID, customizer: Callable[[Pattern], Primitive] = None) -> "Primitive":
+        """
+        Instantiate (clone/customize) an archetype as a new Primitive, recording provenance.
+        """
+        import copy
+        from datetime import datetime, timezone
+
+        async with self._lock:
+            if archetype_id not in self._archetypes:
+                raise KeyError(f"Archetype with id {archetype_id} not found")
+            archetype = self._archetypes[archetype_id]
+            new_primitive = copy.deepcopy(archetype)
+        # Assign new UUID and timestamps
+        from uuid import uuid4
+        new_primitive.id = uuid4()
+        now = datetime.now(timezone.utc)
+        new_primitive.metadata.created_at = now
+        new_primitive.metadata.updated_at = now
+        # Set or append provenance
+        provenance = list(getattr(new_primitive.metadata, "provenance", []))
+        provenance.append(archetype_id)
+        new_primitive.metadata.provenance = provenance
+        # Apply customizer if provided
+        if customizer is not None:
+            new_primitive = customizer(new_primitive)
+        return new_primitive

@@ -9,12 +9,49 @@ class MentalPlane:
     Consumes events from its DigitalPlane and may submit intents back.
     """
 
-    def __init__(self, owner: Identity, boundary: Boundary, memory: MemorySubsystem, selfmap: SelfMap):
+    def __init__(self, owner: Identity, boundary: Boundary, memory: MemorySubsystem, selfmap: SelfMap, metaphysical_plane=None):
         self.owner = owner
         self.boundary = boundary
         self.memory = memory
         self.selfmap = selfmap
         self.event_loop_id = str(owner.id)
+        self.metaphysical_plane = metaphysical_plane  # AsyncMetaphysicalPlane instance
+
+    async def get_archetype(self, id):
+        """
+        Await metaphysical_plane.get_archetype(id)
+        """
+        if self.metaphysical_plane is None:
+            raise RuntimeError("No metaphysical_plane attached")
+        return await self.metaphysical_plane.get_archetype(id)
+
+    async def search_archetypes(self, **kwargs):
+        """
+        Await metaphysical_plane.query_archetypes(**kwargs)
+        """
+        if self.metaphysical_plane is None:
+            raise RuntimeError("No metaphysical_plane attached")
+        return await self.metaphysical_plane.query_archetypes(**kwargs)
+
+    async def subscribe_to_archetypes(self, filter_fn, callback):
+        """
+        Register with metaphysical_plane.subscribe()
+        """
+        if self.metaphysical_plane is None:
+            raise RuntimeError("No metaphysical_plane attached")
+        await self.metaphysical_plane.subscribe(callback, filter_fn)
+
+    async def instantiate_archetype(self, archetype_id, customizer=None):
+        """
+        Get, customize, store locally with provenance.
+        """
+        if self.metaphysical_plane is None:
+            raise RuntimeError("No metaphysical_plane attached")
+        primitive = await self.metaphysical_plane.instantiate_archetype(archetype_id, customizer)
+        # Add to memory and selfmap, record provenance
+        self.memory.insert_memory(primitive)
+        self.selfmap.add_node(primitive)
+        return primitive
 
     def on_event(self, event: Primitive) -> None:
         """
