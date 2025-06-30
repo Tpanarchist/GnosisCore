@@ -62,7 +62,22 @@ class Memory(Primitive):
     """Primitive representing a memory record."""
     type: ClassVar[Literal["Memory"]] = "Memory"
 
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
+class Attention(Primitive):
+    """Primitive representing an attention (focus) event."""
+    type: ClassVar[Literal["Attention"]] = "Attention"
+    subject: Union[UUID, str] = Field(..., description="What is attending (agent/process ID)")
+    object: Union[UUID, str] = Field(..., description="What is attended (entity, pattern, memory, etc.)")
+    intensity: float = Field(1.0, ge=0.0, le=1.0, description="Degree of focus (0.0–1.0)")
+    duration: Optional[float] = Field(None, description="Duration of attention in seconds")
+
+class Qualia(Primitive):
+    """Primitive representing a unit of subjective experience."""
+    type: ClassVar[Literal["Qualia"]] = "Qualia"
+    valence: float = Field(..., ge=-1.0, le=1.0, description="Subjective value: -1.0 (pain) to 1.0 (pleasure)")
+    intensity: float = Field(..., ge=0.0, le=1.0, description="Intensity of experience (0.0–1.0)")
+    modality: str = Field(..., description="Modality (e.g., 'visual', 'emotional', etc.)")
+    about: Union[UUID, str] = Field(..., description="What the qualia is about (memory, entity, etc.)")
 
 class LLMParams(BaseModel):
     model: str = Field(..., description="Model name, e.g. 'gpt-4o-mini'")
