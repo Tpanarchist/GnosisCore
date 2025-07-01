@@ -66,7 +66,22 @@ class MentalPlane:
         scored.sort(reverse=True, key=lambda x: x[0])
         return [n for _, n in scored[:top_n]]
 
-    def __init__(self, owner: Identity, boundary: Boundary, memory: MemorySubsystem, selfmap: SelfMap, metaphysical_plane=None):
+    def __init__(
+        self,
+        owner: Identity,
+        boundary: Boundary,
+        memory: MemorySubsystem,
+        selfmap: SelfMap,
+        metaphysical_plane=None,
+        consolidation_group_window=None,
+        consolidation_min_group_size=3,
+        prune_min_salience=0.2,
+        prune_expiry_duration=None,
+        archival_mode=True,
+        grouping_strategy=None,
+        cycle_interval=60,
+    ):
+        from datetime import timedelta
         self.owner = owner
         self.boundary = boundary
         self.memory = memory
@@ -75,6 +90,14 @@ class MentalPlane:
         self.metaphysical_plane = metaphysical_plane  # AsyncMetaphysicalPlane instance
         self.qualia_log: list[Qualia] = []
         self.feedback_manager = LearningFeedbackManager(memory, selfmap)
+        # Consolidation/pruning config
+        self.consolidation_group_window = consolidation_group_window or timedelta(minutes=10)
+        self.consolidation_min_group_size = consolidation_min_group_size
+        self.prune_min_salience = prune_min_salience
+        self.prune_expiry_duration = prune_expiry_duration or timedelta(days=30)
+        self.archival_mode = archival_mode
+        self.grouping_strategy = grouping_strategy  # Callable or None
+        self.cycle_interval = cycle_interval
 
     async def get_archetype(self, id):
         """
@@ -425,15 +448,171 @@ class MentalPlane:
         """
         Group episodic memories into semantic/abstract knowledge.
         """
-        # Find candidates, group, create new abstraction nodes, update SelfMap, link provenance
-        raise NotImplementedError
+        from datetime import datetime, timezone
+        from uuid import uuid4
+        import itertools
+
+        now = datetime.now(timezone.utc)
+        # Gather candidates: recent, un-abstracted, un-archived episodic memories
+        window_start = now - self.consolidation_group_window
+        candidates = self.memory.query(
+            type="Memory",
+            after=window_start,
+            custom=lambda m: not m.content.get("archived") and not m.content.get("abstracted"),
+        )
+
+        # Grouping: use strategy if provided, else default grouping
+        def default_grouping(memories):
+            # Group by (source, modality, event_type, timestamp proximity)
+            groups = []
+            sorted_mems = sorted(memories, key=lambda m: (m.content.get("source"), m.content.get("modality"), m.content.get("event_type"), m.metadata.created_at))
+            for key, group in itertools.groupby(
+                sorted_mems,
+                key=lambda m: (
+                    m.content.get("source"),
+                    m.content.get("modality"),
+                    m.content.get("event_type"),
+                    # Bucket timestamps by minute
+                    int(m.metadata.created_at.timestamp() // (self.consolidation_group_window.total_seconds() or 1))
+                ),
+            ):
+                group_list = list(group)
+                if len(group_list) >= self.consolidation_min_group_size:
+                    groups.append(group_list)
+            return groups
+
+        grouping_fn = self.grouping_strategy or default_grouping
+        groups = grouping_fn(candidates)
+
+        for group in groups:
+            # Create abstraction node
+            summary = "; ".join([str(m.content.get("summary") or m.content.get("description") or m.content) for m in group])
+            provenance = [m.id for m in group]
+            aggregated_values = {}
+            # Optionally aggregate stats/counts here
+            abstraction = type(group[0])(
+                id=uuid4(),
+                metadata=Metadata(
+                    created_at=now,
+                    updated_at=now,
+                    provenance=provenance,
+                    confidence=min([m.metadata.confidence for m in group]),
+                ),
+                content={
+                    "summary": summary,
+                    "provenance": provenance,
+                    "aggregated_values": aggregated_values,
+                    "abstracted": True,
+                    "modality": group[0].content.get("modality"),
+                    "event_type": group[0].content.get("event_type"),
+                    "source": group[0].content.get("source"),
+                },
+            )
+            # Insert abstraction into memory and selfmap
+            try:
+                self.memory.insert_memory(abstraction)
+                self.selfmap.add_node(abstraction)
+                # Mark originals as archived and low salience
+                for m in group:
+                    m.content["archived"] = True
+                    m.content["salience"] = min(0.01, m.content.get("salience", 1.0))
+                    m.content["abstracted"] = True
+                    m.metadata.updated_at = now
+                    self.memory.update_memory(m)
+                    try:
+                        self.selfmap.update_node(m)
+                    except Exception:
+                        pass
+                # Log as Qualia (positive valence, about = abstraction.id)
+                qualia = Qualia(
+                    id=uuid4(),
+                    metadata=Metadata(created_at=now, updated_at=now),
+                    valence=1.0,
+                    intensity=1.0,
+                    modality="consolidation",
+                    about=abstraction.id,
+                    content={"grouped": provenance, "summary": summary},
+                )
+                self.qualia_log.append(qualia)
+            except Exception as e:
+                import logging
+                logging.error(f"Consolidation failed: {e}")
 
     async def prune_memories(self):
         """
         Prune low-value, contradictory, or expired memories.
         """
-        # Identify nodes for pruning, unlink and archive/remove from SelfMap and Memory
-        raise NotImplementedError
+        from datetime import datetime, timezone
+        from uuid import uuid4
+
+        now = datetime.now(timezone.utc)
+        # Gather all memories and selfmap nodes
+        all_memories = self.memory.query()
+        all_nodes = self.selfmap.all_nodes()
+        # Build set of all provenance references
+        all_provenance = set()
+        for n in all_memories + all_nodes:
+            prov = getattr(n.metadata, "provenance", [])
+            all_provenance.update(prov)
+        # Prune predicate
+        def should_prune(node):
+            if node.content.get("contradicted"):
+                return True
+            if node.content.get("salience", 1.0) < self.prune_min_salience:
+                return True
+            if node.metadata.created_at < (now - self.prune_expiry_duration):
+                if node.id not in all_provenance:
+                    return True
+            return False
+
+        for node in all_memories:
+            if should_prune(node):
+                # Only hard-delete if archival_mode is False and node is not referenced
+                if not self.archival_mode and node.id not in all_provenance:
+                    try:
+                        self.memory.remove_memory(node.id)
+                        try:
+                            self.selfmap.remove_node(node.id)
+                        except Exception:
+                            pass
+                        # Log as Qualia (negative valence, about = node.id)
+                        qualia = Qualia(
+                            id=uuid4(),
+                            metadata=Metadata(created_at=now, updated_at=now),
+                            valence=-1.0,
+                            intensity=1.0,
+                            modality="pruning",
+                            about=node.id,
+                            content={"action": "hard_delete"},
+                        )
+                        self.qualia_log.append(qualia)
+                    except Exception as e:
+                        import logging
+                        logging.error(f"Pruning (hard delete) failed: {e}")
+                else:
+                    # Soft archive
+                    try:
+                        node.content["archived"] = True
+                        node.metadata.updated_at = now
+                        self.memory.update_memory(node)
+                        try:
+                            self.selfmap.update_node(node)
+                        except Exception:
+                            pass
+                        # Log as Qualia (negative valence, about = node.id)
+                        qualia = Qualia(
+                            id=uuid4(),
+                            metadata=Metadata(created_at=now, updated_at=now),
+                            valence=-1.0,
+                            intensity=1.0,
+                            modality="pruning",
+                            about=node.id,
+                            content={"action": "archived"},
+                        )
+                        self.qualia_log.append(qualia)
+                    except Exception as e:
+                        import logging
+                        logging.error(f"Pruning (archive) failed: {e}")
 
     def detect_contradictions(self):
         """
