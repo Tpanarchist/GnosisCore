@@ -13,6 +13,10 @@ GnosisCore is structured around a three-plane model:
 - Plugin-based transformation subsystem for extensibility and controlled self-modification
 - WebSocket-based asynchronous messaging with cryptographically signed JSON payloads
 - JWT authentication, role-based access control, and audit logging for security
+- Thread-safe registries for memory and self-map
+- Salience-weighted recall and meta-cognitive feedback loops
+- LLM-backed transformation as a first-class pattern
+- Comprehensive test-driven development and CI as a core pattern
 
 ## Design Patterns
 - Strongly-typed nodes and edges with provenance, confidence, and temporal context

@@ -1,17 +1,20 @@
 # Progress
 
 ## What Works
-- Memory Bank structure established with core documentation files
-- Project requirements, context, architecture, and technology documented
+- All core subsystems (memory, self-map, transformation, feedback, planes) implemented and tested
+- Thread safety, provenance, and salience mechanisms validated
+- LLM integration and plugin registry functional
+- High test coverage with pytest for all modules
+- Documentation and development conventions established
 
 ## What's Left to Build
-- Project description and README
-- Implementation of core subsystems: memory, self-map, transformation, protocols, integration APIs
-- Unit and integration tests
-- Detailed technical and user documentation
+- Expand docs/ with detailed module specs and user guides
+- Broaden transformation/plugin ecosystem
+- Enhance error handling, audit logging, and boundary enforcement
+- Further integration with external APIs and real-world data
 
 ## Current Status
-- Documentation phase: capturing foundational knowledge and aligning project vision
+- Transitioning from core implementation to ecosystem expansion and documentation
 
 ## Known Issues
-- No technical blockers at this stage; awaiting transition to implementation phase
+- No critical blockers; ongoing work on plugin diversity and documentation depth

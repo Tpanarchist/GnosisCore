@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from typing import Any, Dict, ClassVar
 from typing import Literal
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Metadata(BaseModel):
     """Metadata for all primitives, including provenance and confidence."""
@@ -143,6 +143,20 @@ class Belief(Primitive):
     type: ClassVar[Literal["Belief"]] = "Belief"
 
 from pydantic import ConfigDict
+
+# --- Plugin Metadata Model ---
+
+class PluginInfo(BaseModel):
+    """Metadata for transformation plugins ("Pacts" or others)."""
+    name: str = Field(..., description="Plugin name")
+    version: str = Field(..., description="Plugin version (e.g., '1.0.0')")
+    author: str = Field(..., description="Plugin author")
+    description: str = Field(..., description="Short description of the plugin")
+    enabled: bool = Field(default=True, description="Is the plugin enabled?")
+    permissions: list[str] = Field(default_factory=list, description="Roles/permissions required to use")
+    registered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Registration timestamp")
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Last update timestamp")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Arbitrary plugin metadata")
 
 # --- Advanced Attention & Learning API Models ---
 
