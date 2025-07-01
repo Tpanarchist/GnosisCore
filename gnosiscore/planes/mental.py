@@ -614,22 +614,71 @@ class MentalPlane:
                         import logging
                         logging.error(f"Pruning (archive) failed: {e}")
 
-    def detect_contradictions(self):
+    async def detect_contradictions(self) -> list[tuple[Primitive, Primitive]]:
         """
-        Find pairs of beliefs/memories with contradictory content/values.
-        Returns a list of (Primitive, Primitive) tuples.
+        Detect contradictions among Belief (and optionally Value, Memory) nodes.
+        For each pair with same subject and conflicting value, not archived/contradicted:
+        - Mark both as contradicted
+        - Update provenance
+        - Log a Qualia event (negative valence, modality='contradiction')
+        Returns a list of (Primitive, Primitive) tuples for all contradictions found.
         """
-        # E.g., conflicting Belief or Value nodes
-        # This is a stub; real implementation would require domain-specific logic
+        from uuid import uuid4
+        from datetime import datetime, timezone
         contradictions = []
         nodes = self.selfmap.all_nodes()
+        checked = set()
         for i, n1 in enumerate(nodes):
+            # Only consider Belief nodes (extensible to Value/Memory)
+            if getattr(n1, "type", None) != "Belief":
+                continue
+            if n1.content.get("archived") or n1.content.get("contradicted"):
+                continue
+            subj1 = n1.content.get("subject")
+            val1 = n1.content.get("value")
             for n2 in nodes[i+1:]:
-                if getattr(n1, "type", None) == getattr(n2, "type", None) == "Belief":
-                    v1 = n1.content.get("value")
-                    v2 = n2.content.get("value")
-                    if v1 is not None and v2 is not None and v1 != v2 and n1.content.get("subject") == n2.content.get("subject"):
-                        contradictions.append((n1, n2))
+                if getattr(n2, "type", None) != "Belief":
+                    continue
+                if n2.content.get("archived") or n2.content.get("contradicted"):
+                    continue
+                subj2 = n2.content.get("subject")
+                val2 = n2.content.get("value")
+                if subj1 == subj2 and val1 is not None and val2 is not None and val1 != val2:
+                    pair_key = tuple(sorted([str(n1.id), str(n2.id)]))
+                    if pair_key in checked:
+                        continue
+                    checked.add(pair_key)
+                    contradictions.append((n1, n2))
+                    # Mark both as contradicted
+                    n1.content["contradicted"] = True
+                    n2.content["contradicted"] = True
+                    # Update provenance
+                    prov1 = set(getattr(n1.metadata, "provenance", []))
+                    prov2 = set(getattr(n2.metadata, "provenance", []))
+                    n1.metadata.provenance = list(prov1 | {n2.id})
+                    n2.metadata.provenance = list(prov2 | {n1.id})
+                    self.selfmap.update_node(n1)
+                    self.selfmap.update_node(n2)
+                    # Log Qualia event
+                    qualia = Qualia(
+                        id=uuid4(),
+                        metadata=Metadata(
+                            created_at=datetime.now(timezone.utc),
+                            updated_at=datetime.now(timezone.utc),
+                            provenance=[n1.id, n2.id],
+                            confidence=min(getattr(n1.metadata, "confidence", 1.0), getattr(n2.metadata, "confidence", 1.0)),
+                        ),
+                        valence=-1.0,
+                        intensity=1.0,
+                        modality="contradiction",
+                        about=[n1.id, n2.id],
+                        content={
+                            "contradiction": True,
+                            "subjects": subj1,
+                            "values": [val1, val2],
+                        },
+                    )
+                    self.qualia_log.append(qualia)
         return contradictions
 
     async def correct_contradictions(self):
