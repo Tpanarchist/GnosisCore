@@ -44,6 +44,32 @@ class MetaphysicalPlane:
         with self._lock:
             return self._patterns[archetype_id]
 
+    def register_archetype(self, archetype: Pattern) -> None:
+        """
+        Register a new archetype guiding self-map structure or introspection.
+        Alias for publish_archetype.
+        """
+        self.publish_archetype(archetype)
+
+    def lookup_archetype(self, type: str = None, tags: list = None) -> list:
+        """
+        Query available archetypes for guiding node instantiation or pattern matching.
+        """
+        with self._lock:
+            patterns = list(self._patterns.values())
+        results = []
+        for pattern in patterns:
+            if type is not None:
+                pattern_type = pattern.content.get("type") or getattr(pattern, "type", None)
+                if pattern_type != type:
+                    continue
+            if tags is not None:
+                pattern_tags = pattern.content.get("tags", [])
+                if not set(tags).issubset(set(pattern_tags)):
+                    continue
+            results.append(pattern)
+        return results
+
 
 class AsyncMetaphysicalPlane:
     """

@@ -412,46 +412,66 @@ class MentalPlane:
 
     # --- Memory Consolidation & Pruning Cycles ---
 
-    def start_background_cycles(self, interval_seconds: int = 60):
+    async def run_background_cycles(self):
         """
-        Start background consolidation and pruning cycles.
+        Run background memory consolidation and pruning cycles asynchronously.
         """
-        import threading, time
+        while True:
+            await self.consolidate_memories()
+            await self.prune_memories()
+            await asyncio.sleep(getattr(self, "cycle_interval", 60))  # Default to 60s if not set
 
-        def cycle():
-            while True:
-                try:
-                    self.memory_consolidation_cycle()
-                    self.memory_pruning_cycle()
-                    self.error_correction_cycle()
-                except Exception as e:
-                    logging.error(f"Background cycle error: {e}")
-                time.sleep(interval_seconds)
+    async def consolidate_memories(self):
+        """
+        Group episodic memories into semantic/abstract knowledge.
+        """
+        # Find candidates, group, create new abstraction nodes, update SelfMap, link provenance
+        raise NotImplementedError
 
-        t = threading.Thread(target=cycle, daemon=True)
-        t.start()
+    async def prune_memories(self):
+        """
+        Prune low-value, contradictory, or expired memories.
+        """
+        # Identify nodes for pruning, unlink and archive/remove from SelfMap and Memory
+        raise NotImplementedError
 
-    def memory_consolidation_cycle(self):
+    def detect_contradictions(self):
         """
-        Periodically group episodic memories into semantic knowledge, update abstraction.
-        Integrate with self-map for provenance and semantic links.
+        Find pairs of beliefs/memories with contradictory content/values.
+        Returns a list of (Primitive, Primitive) tuples.
         """
-        # Placeholder: implement grouping/abstraction logic here
-        pass
+        # E.g., conflicting Belief or Value nodes
+        # This is a stub; real implementation would require domain-specific logic
+        contradictions = []
+        nodes = self.selfmap.all_nodes()
+        for i, n1 in enumerate(nodes):
+            for n2 in nodes[i+1:]:
+                if getattr(n1, "type", None) == getattr(n2, "type", None) == "Belief":
+                    v1 = n1.content.get("value")
+                    v2 = n2.content.get("value")
+                    if v1 is not None and v2 is not None and v1 != v2 and n1.content.get("subject") == n2.content.get("subject"):
+                        contradictions.append((n1, n2))
+        return contradictions
 
-    def memory_pruning_cycle(self):
+    async def correct_contradictions(self):
         """
-        Periodically detect and remove low-value, contradictory, or expired memories.
+        Propose and enact corrections for contradictions (LLM or rule-based).
         """
-        # Placeholder: implement pruning logic here
-        pass
-
-    def error_correction_cycle(self):
-        """
-        Periodically flag and resolve internal contradictions (beliefs/memories).
-        """
-        # Placeholder: implement error detection/correction logic here
-        pass
+        # Trigger transformation/intent for correction; optionally interact with LLM plugin
+        # This is a stub; real implementation would require more logic
+        contradictions = self.detect_contradictions()
+        for n1, n2 in contradictions:
+            # Example: mark both as 'contradicted' in content and update provenance
+            n1.content["contradicted"] = True
+            n2.content["contradicted"] = True
+            # Optionally, add provenance links
+            prov = getattr(n1.metadata, "provenance", [])
+            prov2 = getattr(n2.metadata, "provenance", [])
+            n1.metadata.provenance = list(set(prov + [n2.id]))
+            n2.metadata.provenance = list(set(prov2 + [n1.id]))
+            self.selfmap.update_node(n1)
+            self.selfmap.update_node(n2)
+        return contradictions
 
     # --- Observation/Inspection Interface ---
 
