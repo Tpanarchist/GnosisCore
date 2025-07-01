@@ -7,9 +7,10 @@ Supports efficient lookup, update, relationship querying, and chronological trav
 """
 
 from threading import Lock
-from typing import Dict, Set, Iterator, Optional, List, Callable
+from typing import Dict, Set, Iterator, Optional, List, Callable, Any
 from uuid import UUID
-from gnosiscore.primitives.models import Primitive, Connection, State, Value, Label, Memory
+import copy
+from gnosiscore.primitives.models import Primitive, Connection
 
 class SelfMap:
     """
@@ -28,6 +29,8 @@ class SelfMap:
         self._edges: Dict[UUID, Set[UUID]] = {}   # adjacency list
         self._connections: Dict[UUID, Connection] = {}  # edge UUID -> Connection
         self._lock = Lock()
+        self._history: List[Dict[str, Any]] = []  # version history: list of dict snapshots
+        self._version_ids: List[str] = []  # version UUIDs or timestamps
         # Optionally: maintain change history/log for audit
 
     def add_node(self, primitive: Primitive) -> None:
@@ -42,6 +45,7 @@ class SelfMap:
                 raise ValueError(f"Node {primitive.id} already exists.")
             self._nodes[primitive.id] = primitive
             self._edges.setdefault(primitive.id, set())
+            self._save_version()
 
     def update_node(self, primitive: Primitive) -> None:
         """
@@ -54,6 +58,7 @@ class SelfMap:
             if primitive.id not in self._nodes:
                 raise KeyError(f"Node {primitive.id} not found.")
             self._nodes[primitive.id] = primitive
+            self._save_version()
 
     def get_node(self, uid: UUID) -> Primitive:
         """
@@ -85,6 +90,7 @@ class SelfMap:
             to_delete = [cid for cid, conn in self._connections.items() if conn.content.get("source") == uid or conn.content.get("target") == uid]
             for cid in to_delete:
                 del self._connections[cid]
+            self._save_version()
 
     def add_connection(self, conn: Connection) -> None:
         """
@@ -96,6 +102,8 @@ class SelfMap:
         with self._lock:
             source = conn.content.get("source")
             target = conn.content.get("target")
+            if not isinstance(source, UUID) or not isinstance(target, UUID):
+                raise ValueError("Source and target must be UUIDs.")
             if conn.id in self._connections:
                 raise ValueError(f"Connection {conn.id} already exists.")
             if source not in self._nodes or target not in self._nodes:
@@ -104,6 +112,7 @@ class SelfMap:
             self._edges[source].add(target)
             # Optionally, for undirected edges:
             # self._edges[target].add(source)
+            self._save_version()
 
     def remove_connection(self, conn_id: UUID) -> None:
         """
@@ -118,9 +127,11 @@ class SelfMap:
             conn = self._connections[conn_id]
             source = conn.content.get("source")
             target = conn.content.get("target")
-            self._edges[source].discard(target)
-            # Optionally: self._edges[target].discard(source)
+            if isinstance(source, UUID) and isinstance(target, UUID):
+                self._edges[source].discard(target)
+                # Optionally: self._edges[target].discard(source)
             del self._connections[conn_id]
+            self._save_version()
 
     def neighbors(self, uid: UUID) -> Set[UUID]:
         """
@@ -128,6 +139,49 @@ class SelfMap:
         """
         with self._lock:
             return set(self._edges.get(uid, set()))
+
+    def get_nodes_by_type(self, type_name: str) -> List[Primitive]:
+        """Return all nodes of a given Primitive type."""
+        with self._lock:
+            return [n for n in self._nodes.values() if getattr(n, "type", None) == type_name]
+
+    def get_nodes_by_attribute(self, attr: str, value: Any) -> List[Primitive]:
+        """Return all nodes where content[attr] == value."""
+        with self._lock:
+            return [n for n in self._nodes.values() if n.content.get(attr) == value]
+
+    def provenance_walk(self, uid: UUID) -> List[Primitive]:
+        """Return the provenance chain for a node (following metadata.provenance UUIDs)."""
+        with self._lock:
+            chain = []
+            current = self._nodes.get(uid)
+            while current:
+                chain.append(current)
+                prov = getattr(current.metadata, "provenance", [])
+                if prov and prov[0] in self._nodes:
+                    current = self._nodes[prov[0]]
+                else:
+                    break
+            return chain
+
+    def _save_version(self):
+        """Save a deepcopy snapshot of the current state for versioning."""
+        snapshot: Dict[str, Any] = {
+            "nodes": copy.deepcopy(self._nodes),
+            "edges": copy.deepcopy(self._edges),
+            "connections": copy.deepcopy(self._connections),
+        }
+        self._history.append(snapshot)
+        self._version_ids.append(str(len(self._history) - 1))
+
+    def get_version(self, version_id: str) -> Dict[str, Any]:
+        """Retrieve a snapshot by version id (index as str)."""
+        idx = int(version_id)
+        return self._history[idx] if 0 <= idx < len(self._history) else {}
+
+    def list_versions(self) -> List[str]:
+        """List all version ids."""
+        return list(self._version_ids)
 
     def traverse(self, start: UUID, depth: int = 1, filter_fn: Optional[Callable[[Primitive], bool]] = None) -> Iterator[Primitive]:
         """

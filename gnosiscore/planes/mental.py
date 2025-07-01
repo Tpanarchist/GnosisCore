@@ -361,8 +361,124 @@ class MentalPlane:
         """
         return self.selfmap.get_node(uid)
 
-    def update_self_node(self, primitive: Primitive) -> None:
+    # --- SelfMap API Extensions ---
+
+    def add_to_selfmap(self, primitive: Primitive) -> None:
         """
-        Update a node in selfmap.
+        Add a node (Primitive) to the self-map.
         """
-        self.selfmap.update_node(primitive)
+        self.selfmap.add_node(primitive)
+
+    def get_from_selfmap(self, *, id=None, type_name=None, attr=None, value=None):
+        """
+        Retrieve nodes from self-map by id, type, or attribute.
+        """
+        if id is not None:
+            return self.selfmap.get_node(id)
+        if type_name is not None:
+            return self.selfmap.get_nodes_by_type(type_name)
+        if attr is not None and value is not None:
+            return self.selfmap.get_nodes_by_attribute(attr, value)
+        return None
+
+    def traverse_selfmap(self, start_id, depth=1, filter_fn=None):
+        """
+        Traverse the self-map graph from a start node.
+        """
+        return list(self.selfmap.traverse(start_id, depth, filter_fn))
+
+    def update_selfmap_node(self, node_id, updates: dict):
+        """
+        Update a node in the self-map with partial updates.
+        """
+        node = self.selfmap.get_node(node_id)
+        for k, v in updates.items():
+            if hasattr(node, k):
+                setattr(node, k, v)
+            elif k in node.content:
+                node.content[k] = v
+            else:
+                node.content[k] = v
+        self.selfmap.update_node(node)
+
+    def selfmap_versions(self):
+        """
+        Return all version ids and allow retrieval of a specific version.
+        """
+        return {
+            "versions": self.selfmap.list_versions(),
+            "get_version": self.selfmap.get_version,
+        }
+
+    # --- Memory Consolidation & Pruning Cycles ---
+
+    def start_background_cycles(self, interval_seconds: int = 60):
+        """
+        Start background consolidation and pruning cycles.
+        """
+        import threading, time
+
+        def cycle():
+            while True:
+                try:
+                    self.memory_consolidation_cycle()
+                    self.memory_pruning_cycle()
+                    self.error_correction_cycle()
+                except Exception as e:
+                    logging.error(f"Background cycle error: {e}")
+                time.sleep(interval_seconds)
+
+        t = threading.Thread(target=cycle, daemon=True)
+        t.start()
+
+    def memory_consolidation_cycle(self):
+        """
+        Periodically group episodic memories into semantic knowledge, update abstraction.
+        Integrate with self-map for provenance and semantic links.
+        """
+        # Placeholder: implement grouping/abstraction logic here
+        pass
+
+    def memory_pruning_cycle(self):
+        """
+        Periodically detect and remove low-value, contradictory, or expired memories.
+        """
+        # Placeholder: implement pruning logic here
+        pass
+
+    def error_correction_cycle(self):
+        """
+        Periodically flag and resolve internal contradictions (beliefs/memories).
+        """
+        # Placeholder: implement error detection/correction logic here
+        pass
+
+    # --- Observation/Inspection Interface ---
+
+    def export_selfmap_snapshot(self):
+        """
+        Export the current self-map (nodes and connections) as a serializable dict.
+        """
+        return {
+            "nodes": [n.model_dump() for n in self.selfmap.all_nodes()],
+            "connections": [c.model_dump() for c in self.selfmap.all_connections()],
+        }
+
+    def export_qualia_log(self, limit: int = 100):
+        """
+        Export the most recent qualia log entries.
+        """
+        return [q.model_dump() for q in self.qualia_log[-limit:]]
+
+    def export_memory_state(self):
+        """
+        Export all current memories as a serializable list.
+        """
+        return [m.model_dump() for m in self.memory.query()]
+
+    def export_provenance_chain(self, node_id):
+        """
+        Export the provenance chain for a given node in the self-map.
+        """
+        chain = self.selfmap.provenance_walk(node_id)
+        return [n.model_dump() for n in chain]
