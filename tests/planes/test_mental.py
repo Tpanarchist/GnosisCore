@@ -154,7 +154,7 @@ def test_get_update_self_node(mental_plane, primitive):
     assert node.id == primitive.id
     # Update
     primitive.metadata.confidence = 0.9
-    mental_plane.update_self_node(primitive)
+    mental_plane.update_selfmap_node(primitive.id, {"confidence": 0.9})
     node2 = mental_plane.get_self_node(primitive.id)
     assert node2.metadata.confidence == 0.9
 
@@ -245,8 +245,21 @@ def test_selfmap_exception_propagated(mental_plane, primitive, monkeypatch):
     assert primitive.id not in [m.id for m in mental_plane.memory.query()]
 
 def test_submit_intent_sends_to_digital_plane(mental_plane, transformation):
-    result = mental_plane.submit_intent(transformation)
-    # Just check that a Result is returned (actual DigitalPlane integration is out of scope)
+    class DummyDigitalPlane:
+        def submit_intent(self, intent, plane, callback=None):
+            from gnosiscore.primitives.models import Result
+            from uuid import uuid4
+            from datetime import datetime
+            return Result(
+                id=uuid4(),
+                intent_id=intent.id,
+                status="success",
+                output={},
+                error=None,
+                timestamp=datetime.utcnow(),
+            )
+    digital_plane = DummyDigitalPlane()
+    result = mental_plane.submit_intent(transformation, digital_plane)
     from gnosiscore.primitives.models import Result
     assert isinstance(result, Result)
 
@@ -269,21 +282,83 @@ def test_get_update_self_node_keyerror(mental_plane):
     # get_self_node should raise KeyError
     with pytest.raises(KeyError):
         mental_plane.get_self_node(fake_id)
-    # update_self_node should raise KeyError
-    from gnosiscore.primitives.models import Primitive, Metadata
-    from datetime import datetime
-    fake_primitive = Primitive(
-        id=fake_id,
+    # update_selfmap_node should raise KeyError
+    with pytest.raises(KeyError):
+        mental_plane.update_selfmap_node(fake_id, {"confidence": 0.5})
+
+import asyncio
+
+@pytest.mark.asyncio
+async def test_archetype_constrained_abstraction(identity, boundary):
+    from gnosiscore.primitives.models import Memory, Metadata
+    from gnosiscore.memory.subsystem import MemorySubsystem
+    from gnosiscore.selfmap.map import SelfMap
+    from gnosiscore.planes.metaphysical import AsyncMetaphysicalPlane
+    from gnosiscore.planes.mental import MentalPlane
+    from datetime import datetime, timedelta, timezone
+    from uuid import uuid4
+
+    # Use fresh memory and selfmap for isolation
+    memory = MemorySubsystem()
+    selfmap = SelfMap()
+
+    metaphysical_plane = AsyncMetaphysicalPlane()
+    # Override grouping_strategy to force both memories into one group
+    def single_grouping(memories):
+        return [list(memories)]
+    plane = MentalPlane(
+        identity, boundary, memory, selfmap,
+        metaphysical_plane=metaphysical_plane,
+        consolidation_min_group_size=2,
+        grouping_strategy=single_grouping
+    )
+    now = datetime.now(timezone.utc)
+    # Insert two episodic memories with same modality/type to trigger grouping
+    created_time = now - timedelta(minutes=5)
+    m1 = Memory(
+        id=uuid4(),
         metadata=Metadata(
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=created_time,
+            updated_at=created_time,
             provenance=[],
             confidence=1.0,
         ),
-        content={}
+        content={"modality": "test", "event_type": "demo", "source": "unit", "summary": "A"},
     )
-    with pytest.raises(KeyError):
-        mental_plane.update_self_node(fake_primitive)
+    m2 = Memory(
+        id=uuid4(),
+        metadata=Metadata(
+            created_at=created_time,
+            updated_at=created_time,
+            provenance=[],
+            confidence=1.0,
+        ),
+        content={"modality": "test", "event_type": "demo", "source": "unit", "summary": "B"},
+    )
+    plane.memory.insert_memory(m1)
+    plane.memory.insert_memory(m2)
+    # Run consolidation
+    await plane.consolidate_memories()
+    # Debug: print all memories for diagnosis
+    all_memories = list(plane.memory.query())
+    print("All memories after consolidation:")
+    for mem in all_memories:
+        print(f"ID: {mem.id}, abstracted: {mem.content.get('abstracted')}, archived: {mem.content.get('archived')}, summary: {mem.content.get('summary')}")
+    # Check that an abstraction was created
+    abstractions = [m for m in all_memories if m.content.get("abstracted") and not m.content.get("archived")]
+    assert len(abstractions) == 1
+    abstraction = abstractions[0]
+    # Should have archetype_id
+    assert "archetype_id" in abstraction.content
+    # Should have provenance pointing to both source memories and archetype
+    prov = abstraction.metadata.provenance
+    assert m1.id in prov and m2.id in prov
+    # Should have logged Qualia for archetype_abstraction
+    qualia = [q for q in plane.qualia_log if q.modality == "archetype_abstraction"]
+    assert len(qualia) == 1
+    # Should have registered a new archetype in metaphysical_plane
+    archetypes = await metaphysical_plane.query_archetypes(type="demo")
+    assert len(archetypes) == 1
 
 def test_query_memory_filters(mental_plane, primitive):
     import time

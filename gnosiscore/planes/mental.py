@@ -455,11 +455,14 @@ class MentalPlane:
         now = datetime.now(timezone.utc)
         # Gather candidates: recent, un-abstracted, un-archived episodic memories
         window_start = now - self.consolidation_group_window
-        candidates = self.memory.query(
-            type="Memory",
-            after=window_start,
-            custom=lambda m: not m.content.get("archived") and not m.content.get("abstracted"),
-        )
+        # Take a snapshot of candidates at the start to avoid recursive abstraction
+        initial_candidates = [
+            m for m in self.memory.query(
+                type="Memory",
+                after=window_start,
+                custom=lambda m: not m.content.get("archived") and not m.content.get("abstracted"),
+            )
+        ]
 
         # Grouping: use strategy if provided, else default grouping
         def default_grouping(memories):
@@ -482,31 +485,99 @@ class MentalPlane:
             return groups
 
         grouping_fn = self.grouping_strategy or default_grouping
-        groups = grouping_fn(candidates)
+        groups = grouping_fn(initial_candidates)
 
         for group in groups:
-            # Create abstraction node
+            # Archetype-constrained abstraction logic
             summary = "; ".join([str(m.content.get("summary") or m.content.get("description") or m.content) for m in group])
             provenance = [m.id for m in group]
             aggregated_values = {}
-            # Optionally aggregate stats/counts here
+            modality = group[0].content.get("modality")
+            event_type = group[0].content.get("event_type")
+            source = group[0].content.get("source")
+            tags = []
+            if modality:
+                tags.append(modality)
+            if event_type:
+                tags.append(event_type)
+            # Query metaphysical_plane for matching archetype
+            archetype = None
+            if self.metaphysical_plane is not None:
+                try:
+                    matches = await self.metaphysical_plane.query_archetypes(
+                        type=event_type,
+                        tags=tags
+                    )
+                    if matches:
+                        archetype = matches[0]
+                except Exception as e:
+                    import logging
+                    logging.error(f"Archetype lookup failed: {e}")
+            if archetype:
+                archetype_id = archetype.id
+                abstraction_content = {
+                    "summary": summary,
+                    "provenance": provenance,
+                    "aggregated_values": aggregated_values,
+                    "abstracted": True,
+                    "modality": modality,
+                    "event_type": event_type,
+                    "source": source,
+                    "archetype_id": archetype_id,
+                }
+                qualia_valence = 1.0
+                qualia_modality = "archetype_abstraction"
+                qualia_content = {"grouped": provenance, "summary": summary, "archetype_id": str(archetype_id)}
+            else:
+                # Register new archetype
+                from gnosiscore.primitives.models import Pattern
+                from uuid import uuid4
+                archetype_id = uuid4()
+                pattern = Pattern(
+                    id=archetype_id,
+                    metadata=Metadata(
+                        created_at=now,
+                        updated_at=now,
+                        provenance=provenance,
+                        confidence=1.0,
+                    ),
+                    content={
+                        "name": f"Archetype_{event_type or modality or str(archetype_id)[:8]}",
+                        "type": event_type or "AbstractedMemory",
+                        "tags": tags,
+                        "attributes": list(aggregated_values.keys()),
+                        "source": source,
+                        "summary": summary,
+                    },
+                )
+                if self.metaphysical_plane is not None:
+                    try:
+                        await self.metaphysical_plane.publish_archetype(pattern)
+                    except Exception as e:
+                        import logging
+                        logging.error(f"Archetype registration failed: {e}")
+                abstraction_content = {
+                    "summary": summary,
+                    "provenance": provenance,
+                    "aggregated_values": aggregated_values,
+                    "abstracted": True,
+                    "modality": modality,
+                    "event_type": event_type,
+                    "source": source,
+                    "archetype_id": archetype_id,
+                }
+                qualia_valence = 1.0
+                qualia_modality = "archetype_abstraction"
+                qualia_content = {"grouped": provenance, "summary": summary, "archetype_id": str(archetype_id), "new_archetype": True}
             abstraction = type(group[0])(
                 id=uuid4(),
                 metadata=Metadata(
                     created_at=now,
                     updated_at=now,
-                    provenance=provenance,
+                    provenance=provenance + [archetype_id],
                     confidence=min([m.metadata.confidence for m in group]),
                 ),
-                content={
-                    "summary": summary,
-                    "provenance": provenance,
-                    "aggregated_values": aggregated_values,
-                    "abstracted": True,
-                    "modality": group[0].content.get("modality"),
-                    "event_type": group[0].content.get("event_type"),
-                    "source": group[0].content.get("source"),
-                },
+                content=abstraction_content,
             )
             # Insert abstraction into memory and selfmap
             try:
@@ -523,15 +594,15 @@ class MentalPlane:
                         self.selfmap.update_node(m)
                     except Exception:
                         pass
-                # Log as Qualia (positive valence, about = abstraction.id)
+                # Log as Qualia (archetype abstraction event)
                 qualia = Qualia(
                     id=uuid4(),
                     metadata=Metadata(created_at=now, updated_at=now),
-                    valence=1.0,
+                    valence=qualia_valence,
                     intensity=1.0,
-                    modality="consolidation",
+                    modality=qualia_modality,
                     about=abstraction.id,
-                    content={"grouped": provenance, "summary": summary},
+                    content=qualia_content,
                 )
                 self.qualia_log.append(qualia)
             except Exception as e:
