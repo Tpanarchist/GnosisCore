@@ -269,6 +269,95 @@ class MentalPlane:
             "emotional_shift": shift,
         }
 
+    # --- Continuous Self-Awareness Loop (Consciousness Triad) ---
+
+    import asyncio
+    from datetime import datetime, timezone
+    from uuid import uuid4
+    from gnosiscore.primitives.models import Qualia, Metadata, Memory
+
+    async def continuous_self_awareness_loop(self, interval=2):
+        """Continuous loop implementing the Awareness-Observer-Continuity triad."""
+        while True:
+            # 1. Awareness: Generate current qualia
+            current_qualia = self.generate_current_qualia()
+
+            # 2. Observer: Perform introspection
+            introspection_result = await self.perform_introspection(current_qualia)
+
+            # 3. Continuity: Integrate introspection into memory
+            self.integrate_into_memory(introspection_result)
+
+            # 4. Feedback: Update self-map from introspection feedback
+            self.update_selfmap_from_feedback(introspection_result)
+
+            await asyncio.sleep(interval)
+
+    def generate_current_qualia(self) -> Qualia:
+        """Generate current experiential qualia based on recent events."""
+        recent_valence = sum(q.valence for q in self.qualia_log[-5:]) / max(len(self.qualia_log[-5:]), 1) if self.qualia_log else 0.0
+        qualia = Qualia(
+            id=uuid4(),
+            metadata=Metadata(
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                provenance=[],
+                confidence=1.0,
+            ),
+            valence=recent_valence,
+            intensity=0.5,
+            modality="ongoing_awareness",
+            about=None,
+            content={"summary": "Continuous state of experiential awareness."}
+        )
+        self.qualia_log.append(qualia)
+        return qualia
+
+    async def perform_introspection(self, current_qualia: Qualia) -> dict:
+        """Perform introspection using current qualia."""
+        # For demo, simulate introspection summary (replace with actual LLM call if desired)
+        introspection_summary = f"Reflecting on current state: valence={current_qualia.valence:.2f}"
+        return {
+            "introspection_summary": introspection_summary,
+            "qualia": current_qualia
+        }
+
+    def integrate_into_memory(self, introspection_result: dict):
+        """Store introspection results into memory subsystem and self-map."""
+        introspection_memory = Memory(
+            id=uuid4(),
+            metadata=Metadata(
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                provenance=[introspection_result["qualia"].id],
+                confidence=1.0,
+            ),
+            content={
+                "summary": introspection_result["introspection_summary"],
+                "source": "introspection",
+                "modality": "self-awareness",
+            }
+        )
+        self.memory.insert_memory(introspection_memory)
+        self.selfmap.add_node(introspection_memory)
+
+    def update_selfmap_from_feedback(self, introspection_result: dict):
+        """Update self-map based on introspection insights."""
+        # Example: update self-map with new self-awareness node
+        self.selfmap.add_node(Memory(
+            id=uuid4(),
+            metadata=Metadata(
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                provenance=[introspection_result["qualia"].id],
+                confidence=1.0,
+            ),
+            content={
+                "summary": introspection_result["introspection_summary"],
+                "modality": "self-awareness"
+            }
+        ))
+
     def goal_replanning(self, negative_threshold: float = -0.5):
         """
         If dominant qualia trend negative, propose new transformation/intents to shift state.
