@@ -11,6 +11,46 @@ from typing import Dict, Set, Iterator, Optional, List, Callable, Any
 from uuid import UUID
 import copy
 from gnosiscore.primitives.models import Primitive, Connection
+from typing import Any, Dict, Optional, List
+from uuid import uuid4
+
+class SelfObserverModule:
+    """
+    Observes and updates recursive self-model representations within the SelfMap.
+    Each observation creates or updates a meta-node representing the current state of self-modeling.
+    """
+
+    def __init__(self, selfmap: "SelfMap"):
+        self.selfmap = selfmap
+
+    def observe_self_modeling(self, depth: int = 2) -> Optional[Primitive]:
+        """
+        Observe the self-map's own self-modeling nodes up to a given recursion depth,
+        and create/update a meta-self node representing this observation.
+        """
+        # Find all self-model nodes (type == "self-model")
+        self_model_nodes = self.selfmap.get_nodes_by_type("self-model")
+        meta_content = {
+            "observed_self_models": [n.id for n in self_model_nodes],
+            "recursion_depth": depth,
+        }
+        # Create or update a meta-self node
+        from datetime import datetime, timezone
+        from gnosiscore.primitives.models import Metadata
+        now = datetime.now(timezone.utc)
+        meta_node = Primitive(
+            id=uuid4(),
+            type="meta-self-model",
+            content=meta_content,
+            metadata=Metadata(
+                created_at=now,
+                updated_at=now,
+                provenance=[n.id for n in self_model_nodes],
+                confidence=1.0,
+            )
+        )
+        self.selfmap.add_node(meta_node)
+        return meta_node
 
 class SelfMap:
     """
@@ -212,3 +252,40 @@ class SelfMap:
         """Return all connections (edges) in the self map."""
         with self._lock:
             return list(self._connections.values())
+
+    # --- Recursive Self-Modeling Interface ---
+
+    def create_recursive_self_model(self, levels: int = 2) -> List[Primitive]:
+        """
+        Create a chain of self-model nodes, each referencing the previous as its model.
+        """
+        with self._lock:
+            prev_id = None
+            nodes = []
+            for level in range(levels):
+                content = {
+                    "level": level,
+                    "models": [prev_id] if prev_id else [],
+                }
+                node = Primitive(
+                    id=uuid4(),
+                    type="self-model",
+                    content=content,
+                    metadata={}
+                )
+                self._nodes[node.id] = node
+                self._edges.setdefault(node.id, set())
+                if prev_id:
+                    # Add connection from this node to previous
+                    conn = Connection(
+                        id=uuid4(),
+                        type="self-model-reference",
+                        content={"source": node.id, "target": prev_id},
+                        metadata={}
+                    )
+                    self._connections[conn.id] = conn
+                    self._edges[node.id].add(prev_id)
+                prev_id = node.id
+                nodes.append(node)
+            self._save_version()
+            return nodes

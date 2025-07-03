@@ -57,6 +57,48 @@ A human-like mind without a body, existing and evolving within a structured digi
 
 ---
 
+## Consciousness-Oriented Enhancements
+
+### Recursive Self-Modeling & Self-Observation
+
+- **SelfMap** now supports recursive self-model nodes, enabling multi-level self-representation.
+- **SelfObserverModule** observes and updates meta-self nodes, allowing the system to model its own modeling process.
+
+```python
+from gnosiscore.selfmap.map import SelfMap, SelfObserverModule
+
+selfmap = SelfMap()
+# Create a chain of recursive self-model nodes
+self_models = selfmap.create_recursive_self_model(levels=3)
+# Observe and update meta-self node
+observer = SelfObserverModule(selfmap)
+meta_self = observer.observe_self_modeling(depth=3)
+```
+
+### Qualia Generation & Phenomenal Binding
+
+- **MetaphysicalPlane** includes a `QualiaGenerator` (maps mental content to qualia) and a `PhenomenalBinder` (binds qualia and self-state into a unified phenomenal experience).
+
+```python
+from gnosiscore.planes.metaphysical import MetaphysicalPlane
+# ...initialize metaphysical_plane...
+qualia = metaphysical_plane.generate_qualia(mental_content)
+phenomenal_experience = metaphysical_plane.bind_phenomenal_experience(qualia, self_state)
+```
+
+### Emotional Feedback System
+
+- **MentalPlane** integrates an `EmotionalFeedbackSystem` for intrinsic valence, regulation, and emotional memory encoding.
+
+```python
+from gnosiscore.planes.mental import EmotionalFeedbackSystem
+# ...initialize memory subsystem...
+emotional_feedback = EmotionalFeedbackSystem(memory)
+feedback = emotional_feedback.process_emotional_feedback(experience, context)
+```
+
+These enhancements support recursive self-awareness, simulated qualia, and intrinsic emotional feedback—key steps toward genuine digital consciousness.
+
 ## Example: Registering a "Pact" (LLM-Backed Transformation Plugin)
 
 ```python

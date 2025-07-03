@@ -11,6 +11,57 @@ class MentalPlane:
     def on_event(self, event: Primitive) -> None:
         pass
 
+class QualiaGenerator:
+    """
+    Prototype qualia generator: maps mental content to simulated subjective-like qualia representations.
+    """
+    def generate_qualia(self, mental_content: "Primitive") -> "Primitive":
+        # For now, wrap mental content in a new Primitive with type 'qualia'
+        from uuid import uuid4
+        from datetime import datetime, timezone
+        from gnosiscore.primitives.models import Metadata
+        qualia_content = {
+            "source_mental_id": getattr(mental_content, "id", None),
+            "mental_snapshot": getattr(mental_content, "content", {}),
+        }
+        now = datetime.now(timezone.utc)
+        return Primitive(
+            id=uuid4(),
+            type="qualia",
+            content=qualia_content,
+            metadata=Metadata(
+                created_at=now,
+                updated_at=now,
+                provenance=[getattr(mental_content, "id", None)],
+                confidence=1.0,
+            )
+        )
+
+class PhenomenalBinder:
+    """
+    Prototype phenomenal binder: binds qualia and self-state into a unified conscious experience.
+    """
+    def bind(self, qualia: "Primitive", self_state: dict = None) -> "Primitive":
+        from uuid import uuid4
+        from datetime import datetime, timezone
+        from gnosiscore.primitives.models import Metadata
+        binding_content = {
+            "qualia_id": getattr(qualia, "id", None),
+            "self_state": self_state or {},
+        }
+        now = datetime.now(timezone.utc)
+        return Primitive(
+            id=uuid4(),
+            type="phenomenal-experience",
+            content=binding_content,
+            metadata=Metadata(
+                created_at=now,
+                updated_at=now,
+                provenance=[getattr(qualia, "id", None)],
+                confidence=1.0,
+            )
+        )
+
 class MetaphysicalPlane:
     """
     MetaphysicalPlane is the shared, atemporal substrate of archetypes and universal patterns.
@@ -22,6 +73,8 @@ class MetaphysicalPlane:
         self._patterns: Dict[UUID, Pattern] = {}
         self._subscribers: Set[MentalPlane] = set()
         self._lock = Lock()
+        self.qualia_generator = QualiaGenerator()
+        self.phenomenal_binder = PhenomenalBinder()
 
     def publish_archetype(self, archetype: Pattern) -> None:
         with self._lock:
@@ -50,6 +103,18 @@ class MetaphysicalPlane:
         Alias for publish_archetype.
         """
         self.publish_archetype(archetype)
+
+    def generate_qualia(self, mental_content: Primitive) -> Primitive:
+        """
+        Generate qualia from mental content using the QualiaGenerator.
+        """
+        return self.qualia_generator.generate_qualia(mental_content)
+
+    def bind_phenomenal_experience(self, qualia: Primitive, self_state: dict = None) -> Primitive:
+        """
+        Bind qualia and self-state into a unified phenomenal experience.
+        """
+        return self.phenomenal_binder.bind(qualia, self_state)
 
     def lookup_archetype(self, type: str = None, tags: list = None) -> list:
         """

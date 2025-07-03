@@ -6,6 +6,38 @@ from gnosiscore.selfmap.map import SelfMap
 from gnosiscore.planes.learning_feedback import LearningFeedbackManager
 import logging
 
+class EmotionalFeedbackSystem:
+    """
+    Prototype emotional feedback system for intrinsic valence, regulation, and emotional memory encoding.
+    """
+    def __init__(self, memory: MemorySubsystem):
+        self.memory = memory
+
+    def process_emotional_feedback(self, experience: Primitive, context: dict = None) -> dict:
+        # Generate intrinsic valence (simple heuristic: positive if 'success' in content, else negative)
+        valence = 1.0 if experience.content.get("status") == "success" else -1.0
+        regulatory_response = {"regulated_valence": valence}
+        # Encode emotional trace in memory
+        from gnosiscore.primitives.models import Qualia, Metadata
+        from uuid import uuid4
+        from datetime import datetime, timezone
+        qualia = Qualia(
+            id=uuid4(),
+            metadata=Metadata(
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                provenance=[experience.id],
+                confidence=1.0,
+            ),
+            valence=valence,
+            intensity=1.0,
+            modality="emotional_feedback",
+            about=experience.id,
+            content={"context": context or {}, "regulatory_response": regulatory_response},
+        )
+        self.memory.insert_memory(qualia)
+        return {"regulatory_response": regulatory_response, "emotional_trace": qualia}
+
 class MentalPlane:
     """
     MentalPlane embodies a digital self's subjective field: self-map, memory, and transformation intents.
@@ -89,6 +121,7 @@ class MentalPlane:
         self.event_loop_id = str(owner.id)
         self.metaphysical_plane = metaphysical_plane  # AsyncMetaphysicalPlane instance
         self.qualia_log: list[Qualia] = []
+        self.emotional_feedback = EmotionalFeedbackSystem(memory)
         self.feedback_manager = LearningFeedbackManager(memory, selfmap)
         # Consolidation/pruning config
         self.consolidation_group_window = consolidation_group_window or timedelta(minutes=10)
