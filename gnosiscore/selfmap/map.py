@@ -18,10 +18,33 @@ class SelfObserverModule:
     """
     Observes and updates recursive self-model representations within the SelfMap.
     Each observation creates or updates a meta-node representing the current state of self-modeling.
+    Pluggable and composable; supports meta-cognition and contradiction detection.
     """
 
     def __init__(self, selfmap: "SelfMap"):
         self.selfmap = selfmap
+
+    def observe(self):
+        # Stub: scan the mental plane/selfmap and update its own model
+        from datetime import datetime
+        import logging
+        logging.info(f"[SelfObserverModule] Observing selfmap at {datetime.now().isoformat()}")
+
+    def reflect(self):
+        # Stub: generate a meta-representation or “self-model node”
+        import logging
+        logging.info("[SelfObserverModule] Reflecting (stub).")
+
+    def detect_contradiction(self):
+        # Stub: scan for inconsistencies or salient meta-patterns
+        import logging
+        logging.info("[SelfObserverModule] Detecting contradictions (stub).")
+
+    def answer_introspection(self, query):
+        # Stub: return meta-cognitive state or generate qualia of “noticing”
+        import logging
+        logging.info(f"[SelfObserverModule] Answering introspection query: {query}")
+        return f"Stub answer to: {query}"
 
     def observe_self_modeling(self, depth: int = 2) -> Optional[Primitive]:
         """
