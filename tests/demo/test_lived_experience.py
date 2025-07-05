@@ -11,171 +11,99 @@ from uuid import uuid4
 from datetime import datetime, timezone
 
 from gnosiscore.primitives.models import Identity, Boundary, Primitive, Memory, Metadata
+from gnosiscore.primitives.subject import Subject
 from gnosiscore.memory.subsystem import MemorySubsystem
-from gnosiscore.selfmap.map import SelfMap, SelfObserverModule
-from gnosiscore.selfmap.autobiography import AutobiographicalModule
-from gnosiscore.planes.awareness import AwarenessLoop
-from gnosiscore.planes.mental import MentalPlane, EmotionalFeedbackSystem
-from gnosiscore.planes.metaphysical import MetaphysicalPlane, QualiaGenerator, PhenomenalBinder
+from gnosiscore.selfmap.map import SelfMap
+from gnosiscore.transformation.awareness import Awareness
+from gnosiscore.transformation.observer import Observer
+from gnosiscore.transformation.mental import Mental
+from gnosiscore.transformation.digital_self import DigitalSelf
+from gnosiscore.transformation.registry import TransformationHandlerRegistry
+import asyncio
 
 # --- Initialization ---
 
-identity = Identity(
-    id=uuid4(),
-    name="GnosisCoreSubject",
-    metadata=Metadata(
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-        provenance=[],
-        confidence=1.0,
-    ),
-)
-boundary = Boundary(
-    id=uuid4(),
-    name="DefaultBoundary",
-    metadata=Metadata(
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-        provenance=[],
-        confidence=1.0,
-    ),
-)
 memory = MemorySubsystem()
 selfmap = SelfMap()
-metaphysical_plane = MetaphysicalPlane(version="1.0", boundary=boundary)
-observer = SelfObserverModule(selfmap)
-qualia_generator = QualiaGenerator()
-phenomenal_binder = PhenomenalBinder()
-emotional_feedback = EmotionalFeedbackSystem(memory)
-
-mental_plane = MentalPlane(
-    owner=identity,
-    boundary=boundary,
-    memory=memory,
-    selfmap=selfmap,
-    metaphysical_plane=None  # Not async for this demo
-)
+subject = Subject()
+selfmap.add_node(subject)
 
 # --- Demo Parameters ---
 CYCLES = 7
 random.seed(42)
 
-# --- Trace Storage ---
-autobiographical = AutobiographicalModule()
+# --- Triad Setup ---
+memory = MemorySubsystem()
+selfmap = SelfMap()
+subject = Subject()
+selfmap.add_node(subject)
 
-def narrate(msg):
-    print(msg)
-    autobiographical.log_experience(f"{datetime.now(timezone.utc).isoformat()} | {msg}")
+# Instantiate transformation registry
+registry = TransformationHandlerRegistry()
+
+# Instantiate triad modules with registry
+awareness = Awareness(memory=memory, observer=None, subject=subject, registry=registry)
+observer = Observer(memory=memory, awareness=awareness, subject=subject, registry=registry)
+awareness.observer = observer  # circular reference
+mental = Mental(memory=memory, subject=subject, registry=registry, selfmap=selfmap, boundary=None)
+
+# Orchestrator
+digital_self = DigitalSelf(awareness=awareness, observer=observer, mental=mental, subject=subject)
 
 # --- Demo Loop ---
-import asyncio
+import pytest
 
-class DemoAwarenessLoop(AwarenessLoop):
-    def __init__(self, observer, autobiographical, cycles, **kwargs):
-        super().__init__(observer, autobiographical, **kwargs)
-        self.cycles = cycles
-        self.current_cycle = 0
-
-    async def tick(self):
-        self.current_cycle += 1
-        cycle = self.current_cycle
-        narrate(f"\n--- Cycle {cycle} ---")
-
-        # 1. Perception: inject a new event
-        perception_content = {
-            "stimulus": random.choice(["light", "sound", "touch", "idea"]),
-            "intensity": random.uniform(0.5, 1.5),
-            "status": random.choice(["success", "failure"]),
-            "cycle": cycle,
-        }
-        perception = Primitive(
-            id=uuid4(),
-            type="perception",
-            content=perception_content,
-            metadata=Metadata(
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
-                provenance=[],
-                confidence=1.0,
-            ),
-        )
-        mental_plane.on_event(perception)
-        narrate(f"Perceived: {perception_content}")
-
-        # 2. Abstraction: summarize recent perceptions
-        if cycle % 2 == 0:
-            memories = memory.query(type="perception", custom=lambda m: m.content.get("cycle") == cycle)
-            summary = f"Abstracted {len(memories)} perceptions at cycle {cycle}."
-            abstraction = Memory(
-                id=uuid4(),
-                metadata=Metadata(
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc),
-                    provenance=[m.id for m in memories],
-                    confidence=1.0,
-                ),
-                content={
-                    "summary": summary,
-                    "modality": "abstraction",
-                    "cycle": cycle,
-                }
-            )
-            memory.insert_memory(abstraction)
-            selfmap.add_node(abstraction)
-            narrate(f"Abstraction: {summary}")
-
-        # 3. Spontaneous Thought: random chance
-        if random.random() < 0.5:
-            thought_content = {
-                "thought": random.choice(["What if?", "I wonder...", "Could I change?", "Why did that happen?"]),
-                "cycle": cycle,
-            }
-            thought = Primitive(
-                id=uuid4(),
-                type="spontaneous-thought",
-                content=thought_content,
-                metadata=Metadata(
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc),
-                    provenance=[],
-                    confidence=1.0,
-                ),
-            )
-            mental_plane.on_event(thought)
-            narrate(f"Spontaneous Thought: {thought_content['thought']}")
-
-        # 4. Qualia & Emotional Feedback
-        qualia = qualia_generator.generate_qualia(perception)
-        phenomenal = phenomenal_binder.bind(qualia, self_state={"cycle": cycle})
-        feedback = emotional_feedback.process_emotional_feedback(perception)
-        narrate(f"Qualia: {qualia.content} | Emotional Feedback: {feedback['regulatory_response']}")
-
-        # 5. Recursive Self-Modification (meta-self observation)
-        meta_self = observer.observe_self_modeling(depth=2)
-        narrate(f"Meta-self observed: {meta_self.content}")
-
-        # 6. Meta-cognitive awareness
-        emotional_state = mental_plane.get_emotional_state()
-        narrate(f"Meta-cognition: I notice my emotional state is {emotional_state}")
-
-        # Maintain the 'now'
-        self._current_state = {"now": f"cycle_{cycle}"}
-
-    async def run(self):
-        self._running = True
-        while self._running and self.current_cycle < self.cycles:
-            await self.tick()
-            await asyncio.sleep(self.cycle_interval)
-        self._running = False
-
-# Run the triad-driven demo loop
 async def main():
-    loop = DemoAwarenessLoop(observer, autobiographical, cycles=CYCLES, cycle_interval=0)
-    await loop.run()
+    tick_outputs = []
+    key_fields = ["thought", "emotion", "intention", "actions"]
 
-asyncio.run(main())
+    import json
 
-# --- Final Autobiography Trace ---
-narrate("\n=== Final Inner Autobiography Trace ===")
-for entry in autobiographical.replay():
-    print(entry)
+    def extract_fields(result_content):
+        # Extract LLM JSON from nested structure
+        llm_resp = result_content.get("llm_response", {})
+        choices = llm_resp.get("choices", [])
+        if choices:
+            msg = choices[0].get("message", {})
+            content = msg.get("content", "")
+            # Remove markdown code block if present
+            if content.startswith("```json"):
+                content = content.split("```json", 1)[1]
+            if content.startswith("\n"):
+                content = content[1:]
+            if content.endswith("```"):
+                content = content[:-3]
+            try:
+                parsed = json.loads(content)
+                return {k: parsed.get(k) for k in ["thought", "emotion", "intention", "actions"]}
+            except Exception:
+                return {"thought": None, "emotion": None, "intention": None, "actions": None}
+        return {"thought": None, "emotion": None, "intention": None, "actions": None}
+
+    extracted_outputs = []
+
+    for cycle in range(1, CYCLES + 1):
+        print(f"\n--- Cycle {cycle} ---")
+        result = await digital_self.tick()
+        print(f"Tick result: {result}")
+        fields = extract_fields(result.content)
+        extracted_outputs.append(fields)
+
+    # --- Assert: At least one key field changes across cycles ---
+    for field in key_fields:
+        values = [str(output.get(field)) for output in extracted_outputs]
+        assert len(set(values)) > 1, f"Field '{field}' did not change across cycles: {values}"
+
+    # --- Subject Self-Report ---
+    print("\n=== Subject Self-Report ===")
+    if hasattr(subject, "self_report"):
+        report = subject.self_report(memory)
+        print(report)
+        assert report is not None and str(report).strip() != "", "Subject self-report is empty"
+    else:
+        print("Subject self-report not implemented.")
+        assert False, "Subject self-report not implemented."
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())

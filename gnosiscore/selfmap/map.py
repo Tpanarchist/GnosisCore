@@ -46,7 +46,7 @@ class SelfObserverModule:
         logging.info(f"[SelfObserverModule] Answering introspection query: {query}")
         return f"Stub answer to: {query}"
 
-    def observe_self_modeling(self, depth: int = 2) -> Optional[Primitive]:
+    def observe_self_modeling(self, depth: int = 2, subject_id=None) -> Optional[Primitive]:
         """
         Observe the self-map's own self-modeling nodes up to a given recursion depth,
         and create/update a meta-self node representing this observation.
@@ -61,6 +61,10 @@ class SelfObserverModule:
         from datetime import datetime, timezone
         from gnosiscore.primitives.models import Metadata
         now = datetime.now(timezone.utc)
+        provenance_chain = []
+        if subject_id is not None:
+            provenance_chain.append(subject_id)
+        provenance_chain.extend([n.id for n in self_model_nodes])
         meta_node = Primitive(
             id=uuid4(),
             type="meta-self-model",
@@ -68,7 +72,7 @@ class SelfObserverModule:
             metadata=Metadata(
                 created_at=now,
                 updated_at=now,
-                provenance=[n.id for n in self_model_nodes],
+                provenance=provenance_chain,
                 confidence=1.0,
             )
         )
