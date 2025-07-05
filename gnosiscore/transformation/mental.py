@@ -46,6 +46,10 @@ class Mental(Transformation):
         from uuid import uuid4
         from datetime import datetime, timezone
 
+        import json
+        print("\n[Mental] Calling LLM with:")
+        print(f"Prompt:\n{prompt}\n")
+        print(f"Context:\n{input}\n")
         # Use transformation registry handler if available
         if self.registry:
             from gnosiscore.primitives.models import Transformation as TransformationPrimitive, LLMParams
@@ -72,10 +76,22 @@ class Mental(Transformation):
             )
             llm_result = await handler(transformation)
             output_content = getattr(llm_result, "output", llm_result)
+            print(f"[Mental] Raw LLM output:\n{output_content}\n")
+            try:
+                parsed = json.loads(output_content) if isinstance(output_content, str) else output_content
+                print(f"[Mental] Parsed LLM output:\n{parsed}\n")
+            except Exception as e:
+                print(f"[Mental] Failed to parse LLM output: {e}\n")
             if output_content is None:
                 output_content = {"output": ""}
         else:
             output_content = self.llm_transform(input, prompt=prompt)
+            print(f"[Mental] Raw LLM output:\n{output_content}\n")
+            try:
+                parsed = json.loads(output_content) if isinstance(output_content, str) else output_content
+                print(f"[Mental] Parsed LLM output:\n{parsed}\n")
+            except Exception as e:
+                print(f"[Mental] Failed to parse LLM output: {e}\n")
             if output_content is None:
                 output_content = {"output": ""}
 

@@ -59,12 +59,22 @@ class Awareness(Transformation):
             "Be terse and specific. Focus on what is most important to notice right now."
         )
 
+        print("\n[Awareness] Calling LLM with:")
+        print(f"Prompt:\n{role_specific_prompt}\n")
+        print(f"Context:\n{additional_context}\n")
         decision_content = await self.constrained_llm_transform(
             plane=plane,
             available_actions=available_actions,
             role_specific_prompt=role_specific_prompt,
             additional_context=additional_context
         )
+        print(f"[Awareness] Raw LLM output:\n{decision_content}\n")
+        try:
+            import json
+            parsed = json.loads(decision_content) if isinstance(decision_content, str) else decision_content
+            print(f"[Awareness] Parsed LLM output:\n{parsed}\n")
+        except Exception as e:
+            print(f"[Awareness] Failed to parse LLM output: {e}\n")
 
         from gnosiscore.primitives.models import Primitive, Metadata
         from uuid import uuid4

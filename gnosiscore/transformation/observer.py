@@ -36,6 +36,10 @@ class Observer(Transformation):
         from datetime import datetime, timezone
 
         # Use transformation registry handler if available
+        import json
+        print("\n[Observer] Calling LLM with:")
+        print(f"Prompt:\n{prompt}\n")
+        print(f"Context:\n{state}\n")
         if self.registry:
             from gnosiscore.primitives.models import Transformation as TransformationPrimitive, LLMParams
             handler = self.registry.handle if hasattr(self.registry, "handle") else self.registry
@@ -61,10 +65,22 @@ class Observer(Transformation):
             )
             llm_result = await handler(transformation)
             reflection_content = getattr(llm_result, "output", llm_result)
+            print(f"[Observer] Raw LLM output:\n{reflection_content}\n")
+            try:
+                parsed = json.loads(reflection_content) if isinstance(reflection_content, str) else reflection_content
+                print(f"[Observer] Parsed LLM output:\n{parsed}\n")
+            except Exception as e:
+                print(f"[Observer] Failed to parse LLM output: {e}\n")
             if reflection_content is None:
                 reflection_content = {"output": ""}
         else:
             reflection_content = self.llm_transform(state, prompt=prompt)
+            print(f"[Observer] Raw LLM output:\n{reflection_content}\n")
+            try:
+                parsed = json.loads(reflection_content) if isinstance(reflection_content, str) else reflection_content
+                print(f"[Observer] Parsed LLM output:\n{parsed}\n")
+            except Exception as e:
+                print(f"[Observer] Failed to parse LLM output: {e}\n")
             if reflection_content is None:
                 reflection_content = {"output": ""}
 
