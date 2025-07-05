@@ -1,1 +1,1 @@
-# SelfMap package marker
+"""selfmap subpackage"""

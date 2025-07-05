@@ -1,0 +1,1 @@
+"""GnosisCore package"""

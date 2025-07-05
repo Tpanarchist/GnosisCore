@@ -230,3 +230,35 @@ def test_traverse_empty_graph(empty_selfmap: SelfMap) -> None:
     fake_id = uuid4()
     with pytest.raises(KeyError):
         list(sm.traverse(fake_id, depth=1))
+
+def test_selfmap_prompt_builder_basic():
+    from gnosiscore.selfmap.prompt_builder import SelfmapPromptBuilder
+    from types import SimpleNamespace
+
+    # Minimal dummy selfmap and node
+    class DummySelfMap:
+        def neighbors(self, node_id):
+            return ["neighbor-1", "neighbor-2"]
+        def get_node(self, node_id):
+            return SimpleNamespace(id=node_id, label=f"Label-{node_id}", type="Sefirah")
+        def all_connections(self):
+            return [
+                SimpleNamespace(content={"source": "node-1", "name": "Guidance"}, type="path", id="conn-1"),
+                SimpleNamespace(content={"source": "node-1", "name": "Synthesis"}, type="path", id="conn-2"),
+            ]
+    node = SimpleNamespace(id="node-1", label="Netzach", type="Sefirah", content={"emotion": "hope"})
+    dummy_selfmap = DummySelfMap()
+    available_actions = [
+        {"type": "invoke_path", "target": "Guidance", "args": [], "kwargs": {}},
+        {"type": "reflect", "target": "self", "args": [], "kwargs": {}},
+    ]
+    builder = SelfmapPromptBuilder(dummy_selfmap)
+    result = builder.build_prompt(node, "Mental", available_actions)
+    assert "Netzach" in result["prompt"]
+    assert "Guidance" in result["prompt"]
+    assert "reflect" in result["prompt"]
+    assert "Label-neighbor-1" in result["prompt"] or "neighbor-1" in result["prompt"]
+    assert result["context"]["archetype"] == "Netzach"
+    assert result["context"]["plane"] == "Mental"
+    assert "Guidance" in result["context"]["active_paths"]
+    assert result["context"]["prior_emotion"] == "hope"

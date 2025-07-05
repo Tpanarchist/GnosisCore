@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="8" failures="0" skipped="0" tests="8" time="0.445" timestamp="2025-07-04T23:44:50.013795-04:00" hostname="BLD"><testcase classname="" name="tests.demo.test_cline_prompt_integration" time="0.000"><error message="collection failure">ImportError while importing test module 'E:\Dev\GnosisCore\tests\demo\test_cline_prompt_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python311\Lib\importlib\__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\demo\test_cline_prompt_integration.py:4: in &lt;module&gt;
+    from gnosiscore.transformation.digital_self import DigitalSelf
+E   ModuleNotFoundError: No module named 'gnosiscore'</error></testcase><testcase classname="" name="tests.demo.test_kindergarten_learning" time="0.000"><error message="collection failure">ImportError while importing test module 'E:\Dev\GnosisCore\tests\demo\test_kindergarten_learning.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python311\Lib\importlib\__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\demo\test_kindergarten_learning.py:14: in &lt;module&gt;
+    from gnosiscore.primitives.models import (
+E   ModuleNotFoundError: No module named 'gnosiscore'</error></testcase><testcase classname="" name="tests.demo.test_lived_experience" time="0.000"><error message="collection failure">ImportError while importing test module 'E:\Dev\GnosisCore\tests\demo\test_lived_experience.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python311\Lib\importlib\__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\demo\test_lived_experience.py:13: in &lt;module&gt;
+    from gnosiscore.primitives.models import Identity, Boundary, Primitive, Memory, Metadata
+E   ModuleNotFoundError: No module named 'gnosiscore'</error></testcase><testcase classname="" name="tests.memory.test_memory_subsystem" time="0.000"><error message="collection failure">ImportError while importing test module 'E:\Dev\GnosisCore\tests\memory\test_memory_subsystem.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python311\Lib\importlib\__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\memory\test_memory_subsystem.py:6: in &lt;module&gt;
+    from gnosiscore.memory.subsystem import MemorySubsystem
+E   ModuleNotFoundError: No module named 'gnosiscore'</error></testcase><testcase classname="" name="tests.planes" time="0.000"><error message="collection failure">C:\Python311\Lib\importlib\__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+&lt;frozen importlib._bootstrap&gt;:1204: in _gcd_import
+    ???
+&lt;frozen importlib._bootstrap&gt;:1176: in _find_and_load
+    ???
+&lt;frozen importlib._bootstrap&gt;:1147: in _find_and_load_unlocked
+    ???
+&lt;frozen importlib._bootstrap&gt;:690: in _load_unlocked
+    ???
+.env\Lib\site-packages\_pytest\assertion\rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests\planes\conftest.py:5: in &lt;module&gt;
+    from gnosiscore.primitives.models import (
+E   ModuleNotFoundError: No module named 'gnosiscore'</error></testcase><testcase classname="" name="tests.primitives.test_attention_qualia" time="0.000"><error message="collection failure">ImportError while importing test module 'E:\Dev\GnosisCore\tests\primitives\test_attention_qualia.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python311\Lib\importlib\__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\primitives\test_attention_qualia.py:4: in &lt;module&gt;
+    from gnosiscore.primitives.models import Metadata, Attention, Qualia
+E   ModuleNotFoundError: No module named 'gnosiscore'</error></testcase><testcase classname="" name="tests.primitives.test_models" time="0.000"><error message="collection failure">ImportError while importing test module 'E:\Dev\GnosisCore\tests\primitives\test_models.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python311\Lib\importlib\__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\primitives\test_models.py:5: in &lt;module&gt;
+    from gnosiscore.primitives.models import (
+E   ModuleNotFoundError: No module named 'gnosiscore'</error></testcase><testcase classname="" name="tests.selfmap.test_selfmap" time="0.000"><error message="collection failure">ImportError while importing test module 'E:\Dev\GnosisCore\tests\selfmap\test_selfmap.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python311\Lib\importlib\__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\selfmap\test_selfmap.py:4: in &lt;module&gt;
+    from gnosiscore.selfmap.map import SelfMap
+E   ModuleNotFoundError: No module named 'gnosiscore'</error></testcase></testsuite></testsuites>

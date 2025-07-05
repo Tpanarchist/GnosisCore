@@ -460,7 +460,7 @@ class MentalPlane:
                     logging.error(f"Rollback failed in memory: {rollback_err}")
             raise
 
-    def submit_intent(self, transformation: Transformation, digital_plane, callback=None) -> Result:
+    async def submit_intent(self, transformation: Transformation, digital_plane, callback=None):
         """
         Submit a Transformation as an Intent to the DigitalPlane.
         Returns a pending Result. Optionally registers a callback for result delivery.
@@ -475,7 +475,7 @@ class MentalPlane:
             submitted_at=datetime.now(timezone.utc),
             version=1,
         )
-        return digital_plane.submit_intent(intent, self, callback=callback)
+        return await digital_plane.submit_intent(intent, callback=callback)
 
     def on_result(self, result: Result) -> None:
         """

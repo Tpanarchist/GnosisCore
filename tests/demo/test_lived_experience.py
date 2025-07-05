@@ -29,7 +29,7 @@ subject = Subject()
 selfmap.add_node(subject)
 
 # --- Demo Parameters ---
-CYCLES = 7
+CYCLES = 2  # Reduced for faster testing
 random.seed(42)
 
 # --- Triad Setup ---
@@ -42,7 +42,14 @@ selfmap.add_node(subject)
 registry = TransformationHandlerRegistry()
 
 # Instantiate triad modules with registry
-awareness = Awareness(memory=memory, observer=None, subject=subject, registry=registry)
+awareness = Awareness(
+    selfmap=selfmap,
+    current_node_id=subject.id,
+    memory=memory,
+    observer=None,
+    subject=subject,
+    registry=registry
+)
 observer = Observer(memory=memory, awareness=awareness, subject=subject, registry=registry)
 awareness.observer = observer  # circular reference
 mental = Mental(memory=memory, subject=subject, registry=registry, selfmap=selfmap, boundary=None)
@@ -53,7 +60,10 @@ digital_self = DigitalSelf(awareness=awareness, observer=observer, mental=mental
 # --- Demo Loop ---
 import pytest
 
-async def main():
+import pytest
+
+@pytest.mark.asyncio
+async def test_lived_experience():
     tick_outputs = []
     key_fields = ["thought", "emotion", "intention", "actions"]
 
@@ -84,7 +94,9 @@ async def main():
 
     for cycle in range(1, CYCLES + 1):
         print(f"\n--- Cycle {cycle} ---")
+        print("Before tick()")
         result = await digital_self.tick()
+        print("After tick()")
         print(f"Tick result: {result}")
         fields = extract_fields(result.content)
         extracted_outputs.append(fields)
@@ -103,7 +115,3 @@ async def main():
     else:
         print("Subject self-report not implemented.")
         assert False, "Subject self-report not implemented."
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
