@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field
 from uuid import UUID, uuid4
 from datetime import datetime, timezone
-from typing import List, Any
+from typing import List, Any, Optional
+from gnosiscore.primitives.models import Qualia
 
 class Subject(BaseModel):
     """
@@ -15,6 +16,7 @@ class Subject(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     provenance: List[UUID] = []
     state: dict = {}
+    recent_qualia: List[Qualia] = Field(default_factory=list)
 
     def self_report(self, memory):
         """
