@@ -59,8 +59,11 @@ digital_self = DigitalSelf(awareness=awareness, observer=observer, mental=mental
 
 # --- Demo Loop ---
 import pytest
+from rich.console import Console
+from rich.panel import Panel
+import json
 
-import pytest
+console = Console()
 
 @pytest.mark.asyncio
 async def test_lived_experience():
@@ -148,7 +151,32 @@ async def test_lived_experience():
         print("Before tick()")
         result = await digital_self.tick()
         print("After tick()")
-        print(f"Tick result: {result}")
+        # Show the raw LLM JSON output in a styled panel
+        llm_resp = result.content.get("llm_response", {})
+        choices = llm_resp.get("choices", [])
+        if choices:
+            msg = choices[0].get("message", {})
+            content = msg.get("content", "")
+            # Remove markdown code block if present
+            if content.startswith("```json"):
+                content = content.split("```json", 1)[1]
+            if content.startswith("\n"):
+                content = content[1:]
+            if content.endswith("```"):
+                content = content[:-3]
+            try:
+                parsed_json = json.loads(content)
+                pretty_json = json.dumps(parsed_json, indent=2, ensure_ascii=False)
+            except Exception:
+                pretty_json = content
+            console.print(
+                Panel(
+                    pretty_json,
+                    title=f"LLM Output - Cycle {cycle}",
+                    style="bold #39ff14 on #2d0036",
+                    border_style="#39ff14"
+                )
+            )
         fields = extract_fields(result.content)
         extracted_outputs.append(fields)
 
